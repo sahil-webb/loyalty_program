@@ -1,0 +1,15 @@
+-- CreateTable
+CREATE TABLE "RegularPointRule" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "points" INTEGER NOT NULL,
+    "discount" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "PremiumPointRule" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "points" INTEGER NOT NULL,
+    "discount" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
