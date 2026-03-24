@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function PointRule() {
 
@@ -23,6 +23,7 @@ export default function PointRule() {
     loadRules();
   },[]);
 
+
   const saveRule = async () => {
 
     await fetch("/api/pointrule",{
@@ -44,45 +45,40 @@ export default function PointRule() {
 
   };
 
+
   return (
 
     <div style={{padding:"40px"}}>
 
       <h2>Point Rules</h2>
 
-      <div style={{marginBottom:"20px"}}>
+      <select
+        value={type}
+        onChange={(e)=>setType(e.target.value)}
+      >
+        <option value="regular">Regular Customer</option>
+        <option value="premium">Premium Customer</option>
+      </select>
 
-        <select
-          value={type}
-          onChange={(e)=>setType(e.target.value)}
-        >
-          <option value="regular">Regular Customer</option>
-          <option value="premium">Premium Customer</option>
-        </select>
+      <br/><br/>
 
-      </div>
+      <input
+        type="number"
+        placeholder="Points"
+        value={points}
+        onChange={(e)=>setPoints(e.target.value)}
+      />
 
-      <div style={{marginBottom:"10px"}}>
+      <br/><br/>
 
-        <input
-          type="number"
-          placeholder="Points"
-          value={points}
-          onChange={(e)=>setPoints(e.target.value)}
-        />
+      <input
+        type="number"
+        placeholder="Discount $"
+        value={discount}
+        onChange={(e)=>setDiscount(e.target.value)}
+      />
 
-      </div>
-
-      <div style={{marginBottom:"10px"}}>
-
-        <input
-          type="number"
-          placeholder="Discount $"
-          value={discount}
-          onChange={(e)=>setDiscount(e.target.value)}
-        />
-
-      </div>
+      <br/><br/>
 
       <button onClick={saveRule}>
         Save Rule
@@ -92,7 +88,7 @@ export default function PointRule() {
 
       <h3>Regular Customer Rules</h3>
 
-      {regularRules.map((rule)=>(
+      {regularRules.map(rule=>(
         <div key={rule.id}>
           {rule.points} pts → ${rule.discount} off
         </div>
@@ -102,7 +98,7 @@ export default function PointRule() {
 
       <h3>Premium Customer Rules</h3>
 
-      {premiumRules.map((rule)=>(
+      {premiumRules.map(rule=>(
         <div key={rule.id}>
           {rule.points} pts → ${rule.discount} off
         </div>
@@ -111,4 +107,5 @@ export default function PointRule() {
     </div>
 
   );
+
 }

@@ -64,14 +64,14 @@ model PremiumCustomer {
 
 model RegularPointRule {
   id        Int      @id @default(autoincrement())
-  points    Int
+  points    Int      @unique
   discount  Int
   createdAt DateTime @default(now())
 }
 
 model PremiumPointRule {
   id        Int      @id @default(autoincrement())
-  points    Int
+  points    Int      @unique
   discount  Int
   createdAt DateTime @default(now())
 }

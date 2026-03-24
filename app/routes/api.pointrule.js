@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+/* GET RULES */
 export const loader = async () => {
 
   const regular = await prisma.regularPointRule.findMany({
@@ -12,8 +13,14 @@ export const loader = async () => {
     orderBy: { points: "asc" }
   });
 
-  return new Response(JSON.stringify({ regular, premium }));
+  return new Response(JSON.stringify({ regular, premium }), {
+    headers: { "Content-Type": "application/json" }
+  });
+
 };
+
+
+/* SAVE / UPDATE RULE */
 
 export const action = async ({ request }) => {
 
@@ -48,4 +55,5 @@ export const action = async ({ request }) => {
   }
 
   return new Response(JSON.stringify({ success: true }));
+
 };
