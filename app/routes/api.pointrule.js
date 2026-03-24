@@ -2,48 +2,50 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+export const loader = async () => {
+
+  const regular = await prisma.regularPointRule.findMany({
+    orderBy: { points: "asc" }
+  });
+
+  const premium = await prisma.premiumPointRule.findMany({
+    orderBy: { points: "asc" }
+  });
+
+  return new Response(JSON.stringify({ regular, premium }));
+};
+
 export const action = async ({ request }) => {
-  try {
 
-    const body = await request.json();
+  const body = await request.json();
 
-    const type = body.type;
-    const points = body.points;
-    const discount = body.discount;
+  const { type, points, discount } = body;
 
-    if (type === "regular") {
+  if (type === "regular") {
 
-      await prisma.regularPointRule.create({
-        data: {
-          points: points,
-          discount: discount
-        }
-      });
-
-    }
-
-    if (type === "premium") {
-
-      await prisma.premiumPointRule.create({
-        data: {
-          points: points,
-          discount: discount
-        }
-      });
-
-    }
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200
-    });
-
-  } catch (error) {
-
-    console.error("Point rule error:", error);
-
-    return new Response(JSON.stringify({ error: "Server error" }), {
-      status: 500
+    await prisma.regularPointRule.upsert({
+      where: { points: Number(points) },
+      update: { discount: Number(discount) },
+      create: {
+        points: Number(points),
+        discount: Number(discount)
+      }
     });
 
   }
+
+  if (type === "premium") {
+
+    await prisma.premiumPointRule.upsert({
+      where: { points: Number(points) },
+      update: { discount: Number(discount) },
+      create: {
+        points: Number(points),
+        discount: Number(discount)
+      }
+    });
+
+  }
+
+  return new Response(JSON.stringify({ success: true }));
 };
