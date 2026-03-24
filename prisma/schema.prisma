@@ -57,6 +57,7 @@ model RewardRule {
 model PremiumCustomer {
   id        Int      @id @default(autoincrement())
   shopifyId String   @unique
-  email     String
+  email     String?
+  coins     Int      @default(0)
   createdAt DateTime @default(now())
 }
