@@ -5,42 +5,30 @@ const prisma = new PrismaClient();
 export const action = async ({ request }) => {
   try {
 
+    /* -------------------------------
+       GET BODY FROM SHOPIFY FLOW
+    --------------------------------*/
+
     const body = await request.json();
 
     const customerId = body.customer_id;
     const email = body.email;
+    const secret = body.secret;
+
+    /* -------------------------------
+       VALIDATE SECRET
+    --------------------------------*/
+
+    if (secret !== "premium_customer") {
+      return new Response("Unauthorized request", { status: 401 });
+    }
 
     if (!customerId) {
-      return new Response("Customer not found", { status: 400 });
+      return new Response("Customer ID missing", { status: 400 });
     }
 
     /* -------------------------------
-       ADD CUSTOMER TAG IN SHOPIFY
-    --------------------------------*/
-
-    const mutation = `
-      mutation customerUpdate($input: CustomerInput!) {
-        customerUpdate(input: $input) {
-          customer {
-            id
-            tags
-          }
-        }
-      }
-    `;
-
-    await admin.graphql(mutation, {
-      variables: {
-        input: {
-          id: `gid://shopify/Customer/${customerId}`,
-          tags: ["premiumloyalty"]
-        }
-      }
-    });
-
-
-    /* -------------------------------
-       SAVE CUSTOMER IN PRISMA
+       CHECK IF CUSTOMER EXISTS
     --------------------------------*/
 
     const existingCustomer = await prisma.premiumCustomer.findUnique({
@@ -49,27 +37,44 @@ export const action = async ({ request }) => {
       }
     });
 
+    /* -------------------------------
+       CREATE CUSTOMER WITH 500 COINS
+    --------------------------------*/
+
     if (!existingCustomer) {
 
       await prisma.premiumCustomer.create({
         data: {
           shopifyId: String(customerId),
-          email: email
+          email: email,
+          coins: 500
         }
       });
 
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200
-    });
+    /* -------------------------------
+       SUCCESS RESPONSE
+    --------------------------------*/
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Customer added and 500 coins assigned"
+      }),
+      { status: 200 }
+    );
 
   } catch (error) {
 
     console.error("Premium loyalty error:", error);
 
-    return new Response(JSON.stringify({ error: "Server error" }), {
-      status: 500
-    });
+    return new Response(
+      JSON.stringify({
+        error: "Server error"
+      }),
+      { status: 500 }
+    );
+
   }
 };
