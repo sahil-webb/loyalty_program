@@ -28,7 +28,7 @@ export default function App() {
       <PolarisAppProvider i18n={en}>
         <s-app-nav>
           
-          <a href="/app/points_rule">Points Rule</a>
+          <a href="/app/pointrule">Points Rule</a>
          
          <a href="/app/customers">Regular Customers</a>
          <a href="/app/premiumcustomerlist">Premium Customers</a>
