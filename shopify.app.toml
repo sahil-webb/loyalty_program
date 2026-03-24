@@ -2,7 +2,7 @@
 
 client_id = "157693193015edb1a8bd299189f3467f"
 name = "RS loyalty program"
-application_url = "https://example.com"
+application_url = "https://loyaltyprogram-production-2622.up.railway.app"
 embedded = true
 
 [build]
@@ -24,7 +24,7 @@ api_version = "2026-04"
 scopes = "write_metaobject_definitions, write_metaobjects, write_products, read_customers, write_customers, write_discounts, read_discounts, read_orders, write_orders"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://loyaltyprogram-production-2622.up.railway.app/api/auth" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
