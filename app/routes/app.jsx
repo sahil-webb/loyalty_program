@@ -30,7 +30,8 @@ export default function App() {
           
           <a href="/app/points_rule">Points Rule</a>
          
-         <a href="/app/customers">Customers</a>
+         <a href="/app/customers">Regular Customers</a>
+         <a href="/app/premiumcustomerlist">Premium Customers</a>
         
         </s-app-nav>
         <Outlet />

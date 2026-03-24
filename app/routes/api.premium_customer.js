@@ -5,31 +5,34 @@ const prisma = new PrismaClient();
 export const action = async ({ request }) => {
   try {
 
-    /* -------------------------------
-       GET BODY FROM SHOPIFY FLOW
-    --------------------------------*/
-
     const body = await request.json();
 
-    const customerId = body.customer_id;
-    const email = body.email;
     const secret = body.secret;
+    const email = body.email;
 
-    /* -------------------------------
+    /* -----------------------
        VALIDATE SECRET
-    --------------------------------*/
+    ------------------------*/
 
     if (secret !== "premium_customer") {
-      return new Response("Unauthorized request", { status: 401 });
+      return new Response("Unauthorized", { status: 401 });
     }
 
-    if (!customerId) {
+    /* -----------------------
+       EXTRACT CUSTOMER ID
+    ------------------------*/
+
+    let rawCustomerId = body.customer_id;
+
+    if (!rawCustomerId) {
       return new Response("Customer ID missing", { status: 400 });
     }
 
-    /* -------------------------------
-       CHECK IF CUSTOMER EXISTS
-    --------------------------------*/
+    const customerId = rawCustomerId.split("/").pop();
+
+    /* -----------------------
+       CHECK EXISTING CUSTOMER
+    ------------------------*/
 
     const existingCustomer = await prisma.premiumCustomer.findUnique({
       where: {
@@ -37,9 +40,9 @@ export const action = async ({ request }) => {
       }
     });
 
-    /* -------------------------------
-       CREATE CUSTOMER WITH 500 COINS
-    --------------------------------*/
+    /* -----------------------
+       CREATE CUSTOMER + 500 COINS
+    ------------------------*/
 
     if (!existingCustomer) {
 
@@ -53,14 +56,9 @@ export const action = async ({ request }) => {
 
     }
 
-    /* -------------------------------
-       SUCCESS RESPONSE
-    --------------------------------*/
-
     return new Response(
       JSON.stringify({
-        success: true,
-        message: "Customer added and 500 coins assigned"
+        success: true
       }),
       { status: 200 }
     );
