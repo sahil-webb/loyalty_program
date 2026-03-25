@@ -42,15 +42,15 @@ export default function PremiumCustomersPage() {
             "numeric",
             "text",
             "text",
-            "text",
-            "numeric"
+            "numeric",
+            "text"
           ]}
           headings={[
             "ID",
             "Shopify Customer ID",
             "Email",
-            "Created",
-            "coins"
+            "coins",
+            "Created"
           ]}
           rows={rows}
         />

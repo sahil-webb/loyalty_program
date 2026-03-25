@@ -80,12 +80,7 @@ export async function action({ request }) {
       }));
     }
 
-   
     const shopifyCustomerId = customerData.customer.admin_graphql_api_id;
-
-// const shopifyCustomerId_only = graphqlId.split("/").pop();
-
-// console.log(shopifyCustomerId);
 
     /* -------------------------
        STORE IN PRISMA
@@ -103,7 +98,29 @@ export async function action({ request }) {
       }
     });
 
-    const coins = customer.points;
+    /* -------------------------
+       CALCULATE DISCOUNT FROM RULE TABLE
+    ------------------------- */
+
+    const rule = await prisma.regularPointRule.findFirst({
+      where: {
+        points: {
+          lte: customer.points
+        }
+      },
+      orderBy: {
+        points: "desc"
+      }
+    });
+
+    let discountAmount = 0;
+
+    if (rule) {
+      discountAmount = rule.discount;
+    }
+
+    console.log("🎯 Rule matched:", rule);
+    console.log("💰 Discount amount:", discountAmount);
 
     /* -------------------------
        CREATE DISCOUNT CODE
@@ -160,24 +177,26 @@ export async function action({ request }) {
         }
         `,
         {
-          input: {
-            title: discountCode,
-            code: discountCode,
-            startsAt: new Date().toISOString(),
-            customerSelection: {
-              customers: { add: [shopifyCustomerId] }
-            },
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(coins),
-                  appliesOnEachItem: false
+          variables: {
+            input: {
+              title: discountCode,
+              code: discountCode,
+              startsAt: new Date().toISOString(),
+              customerSelection: {
+                customers: { add: [shopifyCustomerId] }
+              },
+              customerGets: {
+                items: { all: true },
+                value: {
+                  discountAmount: {
+                    amount: String(discountAmount),
+                    appliesOnEachItem: false
+                  }
                 }
-              }
-            },
-            usageLimit: 1000,
-            appliesOncePerCustomer: false
+              },
+              usageLimit: 1000,
+              appliesOncePerCustomer: false
+            }
           }
         }
       );
@@ -185,8 +204,9 @@ export async function action({ request }) {
 
     return new Response(JSON.stringify({
       success:true,
-      points:coins,
-      discount:discountCode
+      points:customer.points,
+      discount:discountCode,
+      discountAmount:discountAmount
     }),{
       headers:{
         "Content-Type":"application/json"

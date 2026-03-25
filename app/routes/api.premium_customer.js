@@ -9,6 +9,7 @@ export const action = async ({ request }) => {
 
     const secret = body.secret;
     const email = body.email;
+    const rawCustomerId = body.customer_id;
 
     /* -----------------------
        VALIDATE SECRET
@@ -18,35 +19,37 @@ export const action = async ({ request }) => {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    /* -----------------------
-       EXTRACT CUSTOMER ID
-    ------------------------*/
-
-    let rawCustomerId = body.customer_id;
-
     if (!rawCustomerId) {
       return new Response("Customer ID missing", { status: 400 });
     }
 
     const customerId = rawCustomerId.split("/").pop();
+    const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
     /* -----------------------
-       CHECK EXISTING CUSTOMER
+       CREATE OR UPDATE CUSTOMER
     ------------------------*/
+
+    let customer;
 
     const existingCustomer = await prisma.premiumCustomer.findUnique({
-      where: {
-        shopifyId: String(customerId)
-      }
+      where: { shopifyId: String(customerId) }
     });
 
-    /* -----------------------
-       CREATE CUSTOMER + 500 COINS
-    ------------------------*/
+    if (existingCustomer) {
 
-    if (!existingCustomer) {
+      customer = await prisma.premiumCustomer.update({
+        where: { shopifyId: String(customerId) },
+        data: {
+          coins: {
+            increment: 500
+          }
+        }
+      });
 
-      await prisma.premiumCustomer.create({
+    } else {
+
+      customer = await prisma.premiumCustomer.create({
         data: {
           shopifyId: String(customerId),
           email: email,
@@ -56,9 +59,143 @@ export const action = async ({ request }) => {
 
     }
 
+    /* -----------------------
+       FIND MATCHING DISCOUNT RULE
+    ------------------------*/
+
+    const rule = await prisma.premiumPointRule.findFirst({
+      where: {
+        points: {
+          lte: customer.coins
+        }
+      },
+      orderBy: {
+        points: "desc"
+      }
+    });
+
+    if (!rule) {
+      console.log("No rule matched");
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    }
+
+    const discountAmount = rule.discount;
+
+    /* -----------------------
+       DISCOUNT CODE
+    ------------------------*/
+
+    const discountCode = `VIP-${customerId}`;
+
+    /* -----------------------
+       CHECK IF DISCOUNT EXISTS
+    ------------------------*/
+
+    const discountCheck = await admin.graphql(`
+      query {
+        codeDiscountNodes(first:1, query:"code:${discountCode}") {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `);
+
+    const discountData = await discountCheck.json();
+
+    const discountNode =
+      discountData.data.codeDiscountNodes.edges[0]?.node;
+
+    /* -----------------------
+       CREATE DISCOUNT
+    ------------------------*/
+
+    if (!discountNode) {
+
+      console.log("➕ Creating discount");
+
+      await admin.graphql(
+        `
+        mutation ($input: DiscountCodeBasicInput!) {
+          discountCodeBasicCreate(basicCodeDiscount: $input) {
+            userErrors { message }
+          }
+        }
+        `,
+        {
+          variables: {
+            input: {
+              title: discountCode,
+              code: discountCode,
+              startsAt: new Date().toISOString(),
+
+              customerSelection: {
+                customers: { add: [shopifyCustomerId] }
+              },
+
+              customerGets: {
+                items: { all: true },
+                value: {
+                  discountAmount: {
+                    amount: String(discountAmount),
+                    appliesOnEachItem: false
+                  }
+                }
+              },
+
+              usageLimit: 1000,
+
+              appliesOncePerCustomer: false,
+
+              combinesWith: {
+                shippingDiscounts: true,
+                orderDiscounts: false,
+                productDiscounts: false
+              }
+            }
+          }
+        }
+      );
+
+    } else {
+
+      console.log("✏️ Updating discount");
+
+      await admin.graphql(
+        `
+        mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
+          discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
+            userErrors { message }
+          }
+        }
+        `,
+        {
+          variables: {
+            id: discountNode.id,
+            input: {
+              customerGets: {
+                items: { all: true },
+                value: {
+                  discountAmount: {
+                    amount: String(discountAmount),
+                    appliesOnEachItem: false
+                  }
+                }
+              }
+            }
+          }
+        }
+      );
+
+    }
+
     return new Response(
       JSON.stringify({
-        success: true
+        success: true,
+        coins: customer.coins,
+        discount: discountAmount
       }),
       { status: 200 }
     );
