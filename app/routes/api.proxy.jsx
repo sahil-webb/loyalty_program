@@ -17,9 +17,9 @@ export async function action({ request }) {
       }));
     }
 
-    /* ----------------------------------------------
+    /* -------------------------
        GET SHOP SESSION
-    ---------------------------------------------- */
+    ------------------------- */
 
     const session = await prisma.session.findFirst({
       where: { shop }
@@ -34,9 +34,9 @@ export async function action({ request }) {
 
     const accessToken = session.accessToken;
 
-    /* ----------------------------------------------
+    /* -------------------------
        ADMIN GRAPHQL CLIENT
-    ---------------------------------------------- */
+    ------------------------- */
 
     const admin = {
       graphql: async (query, variables = {}) => {
@@ -51,9 +51,9 @@ export async function action({ request }) {
       }
     };
 
-    /* ----------------------------------------------
+    /* -------------------------
        CREATE SHOPIFY CUSTOMER
-    ---------------------------------------------- */
+    ------------------------- */
 
     const customerRes = await fetch(
       `https://${shop}/admin/api/2024-01/customers.json`,
@@ -71,9 +71,9 @@ export async function action({ request }) {
             password,
             password_confirmation: password,
             verified_email: true,
-            tags: "rsloyalty",
-          },
-        }),
+            tags: "rsloyalty"
+          }
+        })
       }
     );
 
@@ -88,9 +88,9 @@ export async function action({ request }) {
 
     const shopifyCustomerId = customerData.customer.admin_graphql_api_id;
 
-    /* ----------------------------------------------
-       STORE CUSTOMER IN PRISMA
-    ---------------------------------------------- */
+    /* -------------------------
+       STORE IN PRISMA
+    ------------------------- */
 
     const customer = await prisma.rewardCustomer.create({
       data: {
@@ -104,16 +104,14 @@ export async function action({ request }) {
       }
     });
 
-    const coins = customer.points;
-
-    /* ----------------------------------------------
-       CALCULATE DISCOUNT FROM RULE TABLE
-    ---------------------------------------------- */
+    /* -------------------------
+       FIND DISCOUNT RULE
+    ------------------------- */
 
     const rule = await prisma.regularPointRule.findFirst({
       where: {
         points: {
-          lte: coins
+          lte: customer.points
         }
       },
       orderBy: {
@@ -130,17 +128,17 @@ export async function action({ request }) {
     console.log("🎯 Rule matched:", rule);
     console.log("💰 Discount amount:", discountAmount);
 
-    /* ----------------------------------------------
+    /* -------------------------
        DISCOUNT CODE
-    ---------------------------------------------- */
+    ------------------------- */
 
     const discountCode = `PTS-${email.split("@")[0].toUpperCase()}`;
 
     console.log("🎟️ Discount Code:", discountCode);
 
-    /* ----------------------------------------------
-       SEARCH EXISTING DISCOUNT
-    ---------------------------------------------- */
+    /* -------------------------
+       CHECK IF DISCOUNT EXISTS
+    ------------------------- */
 
     const discountSearchRes = await admin.graphql(
       `
@@ -166,14 +164,9 @@ export async function action({ request }) {
 
     const discountSearchData = await discountSearchRes.json();
 
-    console.log("🔍 Discount search response:", discountSearchData);
-
     let discountNode = null;
 
-    const discountNodes =
-      discountSearchData?.data?.codeDiscountNodes?.nodes || [];
-
-    for (const node of discountNodes) {
+    for (const node of discountSearchData.data.codeDiscountNodes.nodes) {
 
       const codes = node.codeDiscount?.codes?.nodes || [];
 
@@ -184,9 +177,9 @@ export async function action({ request }) {
 
     }
 
-    /* ----------------------------------------------
+    /* -------------------------
        CREATE DISCOUNT
-    ---------------------------------------------- */
+    ------------------------- */
 
     if (!discountNode) {
 
@@ -196,20 +189,21 @@ export async function action({ request }) {
         `
         mutation ($input: DiscountCodeBasicInput!) {
           discountCodeBasicCreate(basicCodeDiscount: $input) {
-            codeDiscountNode { id }
-            userErrors { field message }
+            codeDiscountNode {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
           }
         }
         `,
         {
           input: {
             title: discountCode,
-            code: discountCode,
+            codes: [discountCode],
             startsAt: new Date().toISOString(),
-
-            customerSelection: {
-              customers: { add: [shopifyCustomerId] }
-            },
 
             customerGets: {
               items: { all: true },
@@ -222,60 +216,22 @@ export async function action({ request }) {
             },
 
             usageLimit: 1000,
-            appliesOncePerCustomer: false,
-
-            combinesWith: {
-              shippingDiscounts: true,
-              orderDiscounts: false,
-              productDiscounts: false
-            }
+            appliesOncePerCustomer: false
           }
         }
       );
 
       const createDiscountData = await createDiscountRes.json();
 
-      console.log("🎟️ Discount create response:", createDiscountData);
-
-    } else {
-
-      console.log("✏️ Updating discount");
-
-      const updateRes = await admin.graphql(
-        `
-        mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
-          discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
-            userErrors { field message }
-          }
-        }
-        `,
-        {
-          id: discountNode.id,
-          input: {
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(discountAmount),
-                  appliesOnEachItem: false
-                }
-              }
-            }
-          }
-        }
-      );
-
-      const updateData = await updateRes.json();
-
-      console.log("✏️ Discount update response:", updateData);
+      console.log("🎟️ Discount response:", createDiscountData);
 
     }
 
     return new Response(JSON.stringify({
       success:true,
-      points:coins,
+      points:customer.points,
       discount:discountCode,
-      discountAmount
+      discountAmount:discountAmount
     }),{
       headers:{
         "Content-Type":"application/json"
@@ -292,6 +248,5 @@ export async function action({ request }) {
     }),{
       status:500
     });
-
   }
 }
