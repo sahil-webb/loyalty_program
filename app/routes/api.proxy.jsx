@@ -11,10 +11,7 @@ export async function action({ request }) {
     const shop = url.searchParams.get("shop");
 
     if (!shop) {
-      return new Response(JSON.stringify({
-        success:false,
-        message:"Shop missing"
-      }));
+      return new Response(JSON.stringify({ success:false, message:"Shop missing"}));
     }
 
     /* -------------------------
@@ -26,16 +23,13 @@ export async function action({ request }) {
     });
 
     if (!session) {
-      return new Response(JSON.stringify({
-        success:false,
-        message:"Session not found"
-      }));
+      return new Response(JSON.stringify({ success:false, message:"Session not found"}));
     }
 
     const accessToken = session.accessToken;
 
     /* -------------------------
-       ADMIN GRAPHQL CLIENT
+       CREATE ADMIN GRAPHQL CLIENT
     ------------------------- */
 
     const admin = {
@@ -71,9 +65,9 @@ export async function action({ request }) {
             password,
             password_confirmation: password,
             verified_email: true,
-            tags: "rsloyalty"
-          }
-        })
+            tags: "rsloyalty",
+          },
+        }),
       }
     );
 
@@ -105,7 +99,7 @@ export async function action({ request }) {
     });
 
     /* -------------------------
-       FIND DISCOUNT RULE
+       CALCULATE DISCOUNT FROM RULE TABLE
     ------------------------- */
 
     const rule = await prisma.regularPointRule.findFirst({
@@ -129,16 +123,12 @@ export async function action({ request }) {
     console.log("💰 Discount amount:", discountAmount);
 
     /* -------------------------
-       DISCOUNT CODE
+       CREATE DISCOUNT CODE
     ------------------------- */
 
     const discountCode = `PTS-${email.split("@")[0].toUpperCase()}`;
 
     console.log("🎟️ Discount Code:", discountCode);
-
-    /* -------------------------
-       CHECK IF DISCOUNT EXISTS
-    ------------------------- */
 
     const discountSearchRes = await admin.graphql(
       `
@@ -148,11 +138,7 @@ export async function action({ request }) {
             id
             codeDiscount {
               ... on DiscountCodeBasic {
-                codes(first: 10) {
-                  nodes {
-                    code
-                  }
-                }
+                codes(first: 10) { nodes { code } }
               }
             }
           }
@@ -167,64 +153,53 @@ export async function action({ request }) {
     let discountNode = null;
 
     for (const node of discountSearchData.data.codeDiscountNodes.nodes) {
-
       const codes = node.codeDiscount?.codes?.nodes || [];
-
       if (codes.some((c) => c.code === discountCode)) {
         discountNode = node;
         break;
       }
-
     }
 
     /* -------------------------
-       CREATE DISCOUNT
+       CREATE DISCOUNT IF NOT EXISTS
     ------------------------- */
 
     if (!discountNode) {
 
       console.log("➕ Creating discount");
 
-      const createDiscountRes = await admin.graphql(
+      await admin.graphql(
         `
         mutation ($input: DiscountCodeBasicInput!) {
           discountCodeBasicCreate(basicCodeDiscount: $input) {
-            codeDiscountNode {
-              id
-            }
-            userErrors {
-              field
-              message
-            }
+            userErrors { message }
           }
         }
         `,
         {
-          input: {
-            title: discountCode,
-            codes: [discountCode],
-            startsAt: new Date().toISOString(),
-
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(discountAmount),
-                  appliesOnEachItem: false
+          variables: {
+            input: {
+              title: discountCode,
+              code: discountCode,
+              startsAt: new Date().toISOString(),
+              customerSelection: {
+                customers: { add: [shopifyCustomerId] }
+              },
+              customerGets: {
+                items: { all: true },
+                value: {
+                  discountAmount: {
+                    amount: String(discountAmount),
+                    appliesOnEachItem: false
+                  }
                 }
-              }
-            },
-
-            usageLimit: 1000,
-            appliesOncePerCustomer: false
+              },
+              usageLimit: 1000,
+              appliesOncePerCustomer: false
+            }
           }
         }
       );
-
-      const createDiscountData = await createDiscountRes.json();
-
-      console.log("🎟️ Discount response:", createDiscountData);
-
     }
 
     return new Response(JSON.stringify({
