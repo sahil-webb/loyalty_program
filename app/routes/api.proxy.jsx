@@ -35,7 +35,7 @@ export async function action({ request }) {
     const accessToken = session.accessToken;
 
     /* ----------------------------------------------
-       CREATE ADMIN GRAPHQL CLIENT
+       ADMIN GRAPHQL CLIENT
     ---------------------------------------------- */
 
     const admin = {
@@ -131,11 +131,16 @@ export async function action({ request }) {
     console.log("💰 Discount amount:", discountAmount);
 
     /* ----------------------------------------------
-       DISCOUNT CODE LOGIC
+       DISCOUNT CODE
     ---------------------------------------------- */
 
     const discountCode = `PTS-${email.split("@")[0].toUpperCase()}`;
+
     console.log("🎟️ Discount Code:", discountCode);
+
+    /* ----------------------------------------------
+       SEARCH EXISTING DISCOUNT
+    ---------------------------------------------- */
 
     const discountSearchRes = await admin.graphql(
       `
@@ -145,26 +150,38 @@ export async function action({ request }) {
             id
             codeDiscount {
               ... on DiscountCodeBasic {
-                codes(first: 10) { nodes { code } }
+                codes(first: 10) {
+                  nodes {
+                    code
+                  }
+                }
               }
             }
           }
         }
       }
       `,
-      { variables: { query: `code:${discountCode}` } }
+      { query: `code:${discountCode}` }
     );
 
     const discountSearchData = await discountSearchRes.json();
 
+    console.log("🔍 Discount search response:", discountSearchData);
+
     let discountNode = null;
 
-    for (const node of discountSearchData.data.codeDiscountNodes.nodes) {
+    const discountNodes =
+      discountSearchData?.data?.codeDiscountNodes?.nodes || [];
+
+    for (const node of discountNodes) {
+
       const codes = node.codeDiscount?.codes?.nodes || [];
+
       if (codes.some((c) => c.code === discountCode)) {
         discountNode = node;
         break;
       }
+
     }
 
     /* ----------------------------------------------
@@ -175,77 +192,83 @@ export async function action({ request }) {
 
       console.log("➕ Creating discount");
 
-      await admin.graphql(
+      const createDiscountRes = await admin.graphql(
         `
         mutation ($input: DiscountCodeBasicInput!) {
           discountCodeBasicCreate(basicCodeDiscount: $input) {
-            userErrors { message }
+            codeDiscountNode { id }
+            userErrors { field message }
           }
         }
         `,
         {
-          variables: {
-            input: {
-              title: discountCode,
-              code: discountCode,
-              startsAt: new Date().toISOString(),
+          input: {
+            title: discountCode,
+            code: discountCode,
+            startsAt: new Date().toISOString(),
 
-              customerSelection: {
-                customers: { add: [shopifyCustomerId] },
-              },
-
-              customerGets: {
-                items: { all: true },
-                value: {
-                  discountAmount: {
-                    amount: String(discountAmount),
-                    appliesOnEachItem: false,
-                  },
-                },
-              },
-
-              usageLimit: 1000,
-              appliesOncePerCustomer: false,
-
-              combinesWith: {
-                shippingDiscounts: true,
-                orderDiscounts: false,
-                productDiscounts: false,
-              },
+            customerSelection: {
+              customers: { add: [shopifyCustomerId] }
             },
-          },
+
+            customerGets: {
+              items: { all: true },
+              value: {
+                discountAmount: {
+                  amount: String(discountAmount),
+                  appliesOnEachItem: false
+                }
+              }
+            },
+
+            usageLimit: 1000,
+            appliesOncePerCustomer: false,
+
+            combinesWith: {
+              shippingDiscounts: true,
+              orderDiscounts: false,
+              productDiscounts: false
+            }
+          }
         }
       );
+
+      const createDiscountData = await createDiscountRes.json();
+
+      console.log("🎟️ Discount create response:", createDiscountData);
 
     } else {
 
       console.log("✏️ Updating discount");
 
-      await admin.graphql(
+      const updateRes = await admin.graphql(
         `
         mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
           discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
-            userErrors { message }
+            userErrors { field message }
           }
         }
         `,
         {
-          variables: {
-            id: discountNode.id,
-            input: {
-              customerGets: {
-                items: { all: true },
-                value: {
-                  discountAmount: {
-                    amount: String(discountAmount),
-                    appliesOnEachItem: false,
-                  },
-                },
-              },
-            },
-          },
+          id: discountNode.id,
+          input: {
+            customerGets: {
+              items: { all: true },
+              value: {
+                discountAmount: {
+                  amount: String(discountAmount),
+                  appliesOnEachItem: false
+                }
+              }
+            }
+          }
         }
       );
+
+      const updateData = await updateRes.json();
+
+      console.log("✏️ Discount update response:", updateData);
+
     }
 
     return new Response(JSON.stringify({
@@ -269,5 +292,6 @@ export async function action({ request }) {
     }),{
       status:500
     });
+
   }
 }
