@@ -185,46 +185,47 @@ export async function action({ request }) {
 
       console.log("➕ Creating discount");
 
-      const createDiscountRes = await admin.graphql(
-        `
-        mutation ($input: DiscountCodeBasicInput!) {
-          discountCodeBasicCreate(basicCodeDiscount: $input) {
-            codeDiscountNode {
-              id
-            }
-            userErrors {
-              field
-              message
+     const createDiscountRes = await admin.graphql(
+  `
+  mutation ($input: DiscountCodeBasicInput!) {
+    discountCodeBasicCreate(basicCodeDiscount: $input) {
+      codeDiscountNode {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+  `,
+  {
+    variables: {
+      input: {
+        title: discountCode,
+        code: discountCode,
+        startsAt: new Date().toISOString(),
+
+        customerGets: {
+          items: { all: true },
+          value: {
+            discountAmount: {
+              amount: String(discountAmount),
+              appliesOnEachItem: false
             }
           }
-        }
-        `,
-        {
-          input: {
-            title: discountCode,
-            codes: [discountCode],
-            startsAt: new Date().toISOString(),
+        },
 
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(discountAmount),
-                  appliesOnEachItem: false
-                }
-              }
-            },
+        usageLimit: 1000,
+        appliesOncePerCustomer: false
+      }
+    }
+  }
+);
 
-            usageLimit: 1000,
-            appliesOncePerCustomer: false
-          }
-        }
-      );
+const createDiscountData = await createDiscountRes.json();
 
-      const createDiscountData = await createDiscountRes.json();
-
-      console.log("🎟️ Discount response:", createDiscountData);
-
+console.log("🎟️ Discount response:", createDiscountData);
     }
 
     return new Response(JSON.stringify({
