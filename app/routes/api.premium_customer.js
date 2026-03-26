@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { shopify } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 
 const prisma = new PrismaClient();
 
@@ -9,42 +9,20 @@ export const action = async ({ request }) => {
     console.log("🚀 API STARTED");
 
     const body = await request.json();
-    console.log("📩 Body:", body);
+    console.log("📩 Incoming body:", body);
 
     const { secret, email, customer_id, shop } = body;
-
-    /* -----------------------
-       VALIDATE SECRET
-    ------------------------*/
 
     if (secret !== "premium_customer") {
       console.log("❌ Invalid secret");
       return new Response("Unauthorized", { status: 401 });
     }
 
-    if (!shop) {
-      console.log("❌ Shop missing in request");
-      return new Response("Shop missing", { status: 400 });
-    }
+    console.log("🔐 Authenticating admin for shop:", shop);
 
-    /* -----------------------
-       LOAD OFFLINE SESSION
-    ------------------------*/
+    const { admin } = await authenticate.admin(request);
 
-    console.log("🔐 Loading offline session for shop:", shop);
-
-    const session = await shopify.sessionStorage.loadSession(
-      `offline_${shop}`
-    );
-
-    if (!session) {
-      console.log("❌ No offline session found");
-      return new Response("No session", { status: 500 });
-    }
-
-    const client = new shopify.clients.Graphql({ session });
-
-    console.log("✅ Shopify admin client ready");
+    console.log("✅ Admin client ready");
 
     /* -----------------------
        CUSTOMER ID
@@ -53,7 +31,7 @@ export const action = async ({ request }) => {
     const customerId = customer_id.split("/").pop();
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
-    console.log("👤 Customer:", customerId);
+    console.log("👤 Customer ID:", customerId);
 
     /* -----------------------
        CREATE / UPDATE CUSTOMER
@@ -70,13 +48,15 @@ export const action = async ({ request }) => {
       customer = await prisma.premiumCustomer.update({
         where: { email },
         data: {
-          coins: { increment: 500 }
+          coins: {
+            increment: 500
+          }
         }
       });
 
     } else {
 
-      console.log("🆕 Creating customer");
+      console.log("🆕 Creating new customer");
 
       customer = await prisma.premiumCustomer.create({
         data: {
@@ -96,55 +76,57 @@ export const action = async ({ request }) => {
 
     const rule = await prisma.premiumPointRule.findFirst({
       where: {
-        points: { lte: customer.coins }
+        points: {
+          lte: customer.coins
+        }
       },
-      orderBy: { points: "desc" }
+      orderBy: {
+        points: "desc"
+      }
     });
 
-    console.log("📊 Rule:", rule);
+    console.log("📊 Rule found:", rule);
 
     if (!rule) {
-      console.log("⚠️ No rule found");
+      console.log("⚠️ No rule matched");
       return new Response(JSON.stringify({ success: true }));
     }
 
     const discountAmount = rule.discount;
-    const discountCode = `VIP-${customerId}`;
 
-    console.log("🎯 Discount:", discountAmount);
+    console.log("🎯 Discount amount:", discountAmount);
+
+    const discountCode = `VIP-${customerId}`;
 
     /* -----------------------
        CREATE DISCOUNT
     ------------------------*/
 
-    console.log("➕ Creating discount");
+    console.log("➕ Creating discount code");
 
-    const result = await client.query({
-      data: {
-        query: `
-          mutation ($input: DiscountCodeBasicInput!) {
-            discountCodeBasicCreate(basicCodeDiscount: $input) {
-              userErrors { message }
-            }
-          }
-        `,
-        variables: {
-          input: {
-            title: discountCode,
-            code: discountCode,
-            startsAt: new Date().toISOString(),
+    const response = await admin.graphql(`
+      mutation ($input: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $input) {
+          userErrors { message }
+        }
+      }
+    `, {
+      variables: {
+        input: {
+          title: discountCode,
+          code: discountCode,
+          startsAt: new Date().toISOString(),
 
-            customerSelection: {
-              customers: { add: [shopifyCustomerId] }
-            },
+          customerSelection: {
+            customers: { add: [shopifyCustomerId] }
+          },
 
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(discountAmount),
-                  appliesOnEachItem: false
-                }
+          customerGets: {
+            items: { all: true },
+            value: {
+              discountAmount: {
+                amount: String(discountAmount),
+                appliesOnEachItem: false
               }
             }
           }
@@ -152,9 +134,11 @@ export const action = async ({ request }) => {
       }
     });
 
-    console.log("✅ Discount response:", result.body);
+    const result = await response.json();
 
-    console.log("🎉 DONE");
+    console.log("✅ Discount creation response:", result);
+
+    console.log("🎉 PROCESS COMPLETE");
 
     return new Response(JSON.stringify({
       success: true,
@@ -164,7 +148,7 @@ export const action = async ({ request }) => {
 
   } catch (error) {
 
-    console.error("❌ ERROR:", error);
+    console.error("❌ Premium loyalty error:", error);
 
     return new Response(JSON.stringify({
       error: "Server error"
