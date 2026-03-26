@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 /* ========================================================
-   ENV VARIABLES
+ENV VARIABLES
 ======================================================== */
 
 const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
@@ -11,11 +11,11 @@ const ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 const FLOW_SECRET = process.env.FLOW_SECRET;
 
 if (!SHOP || !ACCESS_TOKEN) {
-  throw new Error("❌ Missing Shopify environment variables");
+  throw new Error("Missing Shopify environment variables");
 }
 
 /* ========================================================
-   SHOPIFY GRAPHQL HELPER
+SHOPIFY GRAPHQL HELPER
 ======================================================== */
 
 async function shopifyGraphQL(query, variables = {}) {
@@ -36,7 +36,7 @@ async function shopifyGraphQL(query, variables = {}) {
 }
 
 /* ========================================================
-   API ROUTE
+FLOW API
 ======================================================== */
 
 export const action = async ({ request }) => {
@@ -49,7 +49,7 @@ export const action = async ({ request }) => {
 
     console.log("📩 Incoming body:", body);
 
-    const { email, customer_id, shop, secret } = body;
+    const { email, customer_id, secret } = body;
 
     /* -----------------------
        SECRET VALIDATION
@@ -63,11 +63,9 @@ export const action = async ({ request }) => {
 
     }
 
-    if (!email || !customer_id) {
+    if (!customer_id) {
 
-      console.log("❌ Missing required fields");
-
-      return new Response("Missing data", { status: 400 });
+      return new Response("Missing customer id", { status: 400 });
 
     }
 
@@ -82,19 +80,27 @@ export const action = async ({ request }) => {
     console.log("👤 Customer:", customerId);
 
     /* -----------------------
-       CREATE / UPDATE CUSTOMER
+       FIND CUSTOMER
     ----------------------- */
 
     let customer = await prisma.premiumCustomer.findUnique({
-      where: { email }
+      where: {
+        shopifyId: customerId
+      }
     });
+
+    /* -----------------------
+       CREATE OR UPDATE
+    ----------------------- */
 
     if (customer) {
 
       console.log("➕ Existing customer → +500 coins");
 
       customer = await prisma.premiumCustomer.update({
-        where: { email },
+        where: {
+          shopifyId: customerId
+        },
         data: {
           coins: {
             increment: 500
@@ -108,34 +114,37 @@ export const action = async ({ request }) => {
 
       customer = await prisma.premiumCustomer.create({
         data: {
-          email,
           shopifyId: customerId,
+          email: email ?? null,
           coins: 500
         }
       });
 
     }
 
-    console.log("💰 Customer coins:", customer.coins);
+    console.log("💰 Total coins:", customer.coins);
 
     /* -----------------------
-       FIND DISCOUNT RULE
+       FIND RULE
     ----------------------- */
 
     const rule = await prisma.premiumPointRule.findFirst({
+
       where: {
         points: {
           lte: customer.coins
         }
       },
+
       orderBy: {
         points: "desc"
       }
+
     });
 
     if (!rule) {
 
-      console.log("⚠️ No discount rule found");
+      console.log("No rule matched");
 
       return new Response(JSON.stringify({
         success: true,
@@ -148,7 +157,7 @@ export const action = async ({ request }) => {
 
     const discountAmount = rule.discount;
 
-    console.log("🎯 Discount rule matched:", discountAmount);
+    console.log("🎯 Discount:", discountAmount);
 
     /* -----------------------
        DISCOUNT CODE
@@ -156,7 +165,7 @@ export const action = async ({ request }) => {
 
     const discountCode = `VIP-${customerId}`;
 
-    console.log("🏷 Discount code:", discountCode);
+    console.log("🏷 Creating discount:", discountCode);
 
     /* -----------------------
        CREATE DISCOUNT
@@ -165,16 +174,12 @@ export const action = async ({ request }) => {
     const result = await shopifyGraphQL(
 
       `mutation discountCreate($input: DiscountCodeBasicInput!) {
-
         discountCodeBasicCreate(basicCodeDiscount: $input) {
-
           userErrors {
             field
             message
           }
-
         }
-
       }`,
 
       {
@@ -194,20 +199,13 @@ export const action = async ({ request }) => {
 
           customerGets: {
 
-            items: {
-              all: true
-            },
+            items: { all: true },
 
             value: {
-
               discountAmount: {
-
                 amount: discountAmount.toString(),
-
                 appliesOnEachItem: false
-
               }
-
             }
 
           },
@@ -215,11 +213,9 @@ export const action = async ({ request }) => {
           usageLimit: 1,
 
           combinesWith: {
-
             shippingDiscounts: true,
             orderDiscounts: false,
             productDiscounts: false
-
           }
 
         }
@@ -227,10 +223,10 @@ export const action = async ({ request }) => {
 
     );
 
-    console.log("📦 Shopify response:", result);
+    console.log("📦 Shopify result:", result);
 
     /* -----------------------
-       RETURN SUCCESS
+       RESPONSE
     ----------------------- */
 
     return new Response(JSON.stringify({
