@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { authenticate } from "../shopify.server";
+import { shopify } from "../shopify.server";
 
 const prisma = new PrismaClient();
 
@@ -8,289 +8,167 @@ export const action = async ({ request }) => {
 
     console.log("🚀 API STARTED");
 
-    /* -----------------------
-       GET SHOPIFY ADMIN CLIENT
-    ------------------------*/
-    console.log("🔐 Authenticating Shopify admin");
-
-    const { admin } = await authenticate.admin(request);
-
-    console.log("✅ Shopify admin authenticated");
-
     const body = await request.json();
+    console.log("📩 Body:", body);
 
-    console.log("📩 Request body received:", body);
-
-    const secret = body.secret;
-    const email = body.email;
-
-    console.log("🔑 Secret:", secret);
-    console.log("📧 Email:", email);
+    const { secret, email, customer_id, shop } = body;
 
     /* -----------------------
        VALIDATE SECRET
     ------------------------*/
 
-    console.log("🔍 Validating secret");
-
     if (secret !== "premium_customer") {
-      console.log("❌ Invalid secret received");
+      console.log("❌ Invalid secret");
       return new Response("Unauthorized", { status: 401 });
     }
 
-    console.log("✅ Secret validated");
-
-    /* -----------------------
-       EXTRACT CUSTOMER ID
-    ------------------------*/
-
-    console.log("👤 Extracting Shopify customer ID");
-
-    let rawCustomerId = body.customer_id;
-
-    if (!rawCustomerId) {
-      console.log("❌ Customer ID missing in request");
-      return new Response("Customer ID missing", { status: 400 });
+    if (!shop) {
+      console.log("❌ Shop missing in request");
+      return new Response("Shop missing", { status: 400 });
     }
 
-    const customerId = rawCustomerId.split("/").pop();
-    const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
-
-    console.log("🆔 Extracted customerId:", customerId);
-    console.log("🪪 Shopify GID:", shopifyCustomerId);
-
     /* -----------------------
-       CREATE OR UPDATE CUSTOMER
+       LOAD OFFLINE SESSION
     ------------------------*/
 
-    console.log("🔎 Checking if customer exists in DB");
+    console.log("🔐 Loading offline session for shop:", shop);
 
-    let customer;
+    const session = await shopify.sessionStorage.loadSession(
+      `offline_${shop}`
+    );
 
-    const existingCustomer = await prisma.premiumCustomer.findUnique({
-      where: {
-        shopifyId: String(customerId)
-      }
+    if (!session) {
+      console.log("❌ No offline session found");
+      return new Response("No session", { status: 500 });
+    }
+
+    const client = new shopify.clients.Graphql({ session });
+
+    console.log("✅ Shopify admin client ready");
+
+    /* -----------------------
+       CUSTOMER ID
+    ------------------------*/
+
+    const customerId = customer_id.split("/").pop();
+    const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
+
+    console.log("👤 Customer:", customerId);
+
+    /* -----------------------
+       CREATE / UPDATE CUSTOMER
+    ------------------------*/
+
+    let customer = await prisma.premiumCustomer.findUnique({
+      where: { email }
     });
 
-    console.log("📦 Existing customer result:", existingCustomer);
+    if (customer) {
 
-    if (existingCustomer) {
-
-      console.log("➕ Customer exists → incrementing 500 coins");
+      console.log("➕ Adding 500 coins");
 
       customer = await prisma.premiumCustomer.update({
-        where: {
-          shopifyId: String(customerId)
-        },
+        where: { email },
         data: {
-          coins: {
-            increment: 500
-          }
+          coins: { increment: 500 }
         }
       });
 
-      console.log("💰 Coins after increment:", customer.coins);
-
     } else {
 
-      console.log("🆕 Customer not found → creating new entry");
+      console.log("🆕 Creating customer");
 
       customer = await prisma.premiumCustomer.create({
         data: {
-          shopifyId: String(customerId),
-          email: email,
+          shopifyId: customerId,
+          email,
           coins: 500
         }
       });
 
-      console.log("🎉 New customer created:", customer);
     }
 
-    const coins = customer.coins;
-
-    console.log("💳 Total coins now:", coins);
+    console.log("💰 Coins:", customer.coins);
 
     /* -----------------------
-       FIND MATCHING POINT RULE
+       FIND RULE
     ------------------------*/
-
-    console.log("📊 Searching matching discount rule");
 
     const rule = await prisma.premiumPointRule.findFirst({
       where: {
-        points: {
-          lte: coins
-        }
+        points: { lte: customer.coins }
       },
-      orderBy: {
-        points: "desc"
-      }
+      orderBy: { points: "desc" }
     });
 
-    console.log("📊 Rule found:", rule);
+    console.log("📊 Rule:", rule);
 
     if (!rule) {
-      console.log("⚠️ No discount rule found for coins:", coins);
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
+      console.log("⚠️ No rule found");
+      return new Response(JSON.stringify({ success: true }));
     }
 
     const discountAmount = rule.discount;
-
-    console.log("🎯 Discount amount determined:", discountAmount);
-
-    /* -----------------------
-       DISCOUNT CODE NAME
-    ------------------------*/
-
     const discountCode = `VIP-${customerId}`;
 
-    console.log("🏷 Discount code generated:", discountCode);
-
-    /* -----------------------
-       CHECK EXISTING DISCOUNT
-    ------------------------*/
-
-    console.log("🔎 Checking if discount already exists");
-
-    const discountCheck = await admin.graphql(`
-      query {
-        codeDiscountNodes(first:1, query:"code:${discountCode}") {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-      }
-    `);
-
-    const discountData = await discountCheck.json();
-
-    console.log("📦 Discount check response:", discountData);
-
-    const discountNode =
-      discountData?.data?.codeDiscountNodes?.edges[0]?.node;
-
-    console.log("📦 Existing discount node:", discountNode);
+    console.log("🎯 Discount:", discountAmount);
 
     /* -----------------------
        CREATE DISCOUNT
     ------------------------*/
 
-    if (!discountNode) {
+    console.log("➕ Creating discount");
 
-      console.log("➕ Creating new Shopify discount");
-
-      const createResponse = await admin.graphql(
-        `
-        mutation ($input: DiscountCodeBasicInput!) {
-          discountCodeBasicCreate(basicCodeDiscount: $input) {
-            userErrors { message }
-          }
-        }
-        `,
-        {
-          variables: {
-            input: {
-              title: discountCode,
-              code: discountCode,
-              startsAt: new Date().toISOString(),
-
-              customerSelection: {
-                customers: { add: [shopifyCustomerId] }
-              },
-
-              customerGets: {
-                items: { all: true },
-                value: {
-                  discountAmount: {
-                    amount: String(discountAmount),
-                    appliesOnEachItem: false
-                  }
-                }
-              },
-
-              usageLimit: 1000,
-
-              appliesOncePerCustomer: false,
-
-              combinesWith: {
-                shippingDiscounts: true,
-                orderDiscounts: false,
-                productDiscounts: false
-              }
+    const result = await client.query({
+      data: {
+        query: `
+          mutation ($input: DiscountCodeBasicInput!) {
+            discountCodeBasicCreate(basicCodeDiscount: $input) {
+              userErrors { message }
             }
           }
-        }
-      );
-
-      const createResult = await createResponse.json();
-
-      console.log("✅ Discount creation response:", createResult);
-
-    } else {
-
-      /* -----------------------
-         UPDATE DISCOUNT
-      ------------------------*/
-
-      console.log("✏️ Updating existing discount");
-
-      const updateResponse = await admin.graphql(
-        `
-        mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
-          discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
-            userErrors { message }
-          }
-        }
         `,
-        {
-          variables: {
-            id: discountNode.id,
-            input: {
-              customerGets: {
-                items: { all: true },
-                value: {
-                  discountAmount: {
-                    amount: String(discountAmount),
-                    appliesOnEachItem: false
-                  }
+        variables: {
+          input: {
+            title: discountCode,
+            code: discountCode,
+            startsAt: new Date().toISOString(),
+
+            customerSelection: {
+              customers: { add: [shopifyCustomerId] }
+            },
+
+            customerGets: {
+              items: { all: true },
+              value: {
+                discountAmount: {
+                  amount: String(discountAmount),
+                  appliesOnEachItem: false
                 }
               }
             }
           }
         }
-      );
+      }
+    });
 
-      const updateResult = await updateResponse.json();
+    console.log("✅ Discount response:", result.body);
 
-      console.log("✅ Discount update response:", updateResult);
+    console.log("🎉 DONE");
 
-    }
-
-    console.log("🎉 PROCESS COMPLETED SUCCESSFULLY");
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        coins: coins,
-        discount: discountAmount,
-        code: discountCode
-      }),
-      { status: 200 }
-    );
+    return new Response(JSON.stringify({
+      success: true,
+      coins: customer.coins,
+      discount: discountAmount
+    }));
 
   } catch (error) {
 
-    console.error("❌ Premium loyalty error:", error);
+    console.error("❌ ERROR:", error);
 
-    return new Response(
-      JSON.stringify({
-        error: "Server error"
-      }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({
+      error: "Server error"
+    }), { status: 500 });
 
   }
 };
