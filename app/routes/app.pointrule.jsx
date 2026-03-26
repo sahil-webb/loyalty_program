@@ -24,22 +24,51 @@ export default function PointRule() {
   },[]);
 
 
-  const saveRule = async () => {
+  /* ADD RULE LOCALLY */
 
-    await fetch("/api/pointrule",{
-      method:"POST",
-      headers:{
-        "Content-Type":"application/json"
-      },
-      body:JSON.stringify({
-        type,
-        points,
-        discount
-      })
-    });
+  const addRule = () => {
+
+    const rule = {
+      points:Number(points),
+      discount:Number(discount)
+    };
+
+    if(type === "regular"){
+
+      setRegularRules([...regularRules,rule]);
+
+    } else {
+
+      setPremiumRules([...premiumRules,rule]);
+
+    }
 
     setPoints("");
     setDiscount("");
+
+  };
+
+
+  /* FINAL SAVE */
+
+  const saveAllRules = async () => {
+
+    await fetch("/api/pointrule",{
+
+      method:"POST",
+
+      headers:{
+        "Content-Type":"application/json"
+      },
+
+      body:JSON.stringify({
+        regularRules,
+        premiumRules
+      })
+
+    });
+
+    alert("Rules saved successfully");
 
     loadRules();
 
@@ -80,29 +109,49 @@ export default function PointRule() {
 
       <br/><br/>
 
-      <button onClick={saveRule}>
-        Save Rule
+      <button onClick={addRule}>
+        Add Rule
       </button>
 
       <hr style={{margin:"40px 0"}}/>
 
       <h3>Regular Customer Rules</h3>
 
-      {regularRules.map(rule=>(
-        <div key={rule.id}>
+      {regularRules.map((rule,index)=>(
+
+        <div key={index}>
           {rule.points} pts → ${rule.discount} off
         </div>
+
       ))}
 
       <hr style={{margin:"40px 0"}}/>
 
       <h3>Premium Customer Rules</h3>
 
-      {premiumRules.map(rule=>(
-        <div key={rule.id}>
+      {premiumRules.map((rule,index)=>(
+
+        <div key={index}>
           {rule.points} pts → ${rule.discount} off
         </div>
+
       ))}
+
+      <hr style={{margin:"40px 0"}}/>
+
+      <button
+        style={{
+          padding:"12px 30px",
+          fontSize:"16px",
+          background:"#000",
+          color:"#fff",
+          border:"none",
+          cursor:"pointer"
+        }}
+        onClick={saveAllRules}
+      >
+        Final Save Rules
+      </button>
 
     </div>
 
