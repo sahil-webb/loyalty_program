@@ -1,37 +1,63 @@
 import { PrismaClient } from "@prisma/client";
-import { shopify } from "../shopify.server";
+import { authenticate } from "../shopify.server";
 
 const prisma = new PrismaClient();
 
 export const action = async ({ request }) => {
+
   try {
 
     console.log("🚀 Flow API triggered");
 
     const body = await request.json();
 
+    console.log("📩 Incoming body:", body);
+
     const { email, customer_id, shop, secret } = body;
 
+    /* -----------------------
+       SECRET VALIDATION
+    ----------------------- */
+
     if (secret !== "premium_customer") {
+
+      console.log("❌ Invalid secret");
+
       return new Response("Unauthorized", { status: 401 });
+
     }
 
     if (!email || !customer_id || !shop) {
+
+      console.log("❌ Missing required data");
+
       return new Response("Missing data", { status: 400 });
+
     }
 
-    /* -------------------------
-       CUSTOMER ID
-    -------------------------- */
+    /* -----------------------
+       AUTHENTICATE SHOPIFY
+    ----------------------- */
 
-    const id = customer_id.split("/").pop();
-    const shopifyCustomerId = `gid://shopify/Customer/${id}`;
+    console.log("🔐 Authenticating Shopify Admin");
 
-    console.log("Customer:", id);
+    const { admin } = await authenticate.admin(request, { shop });
 
-    /* -------------------------
+    console.log("✅ Admin authenticated");
+
+    /* -----------------------
+       CUSTOMER ID FORMAT
+    ----------------------- */
+
+    const customerId = customer_id.split("/").pop();
+
+    const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
+
+    console.log("👤 Customer:", customerId);
+
+    /* -----------------------
        CREATE / UPDATE CUSTOMER
-    -------------------------- */
+    ----------------------- */
 
     let customer = await prisma.premiumCustomer.findUnique({
       where: { email }
@@ -39,7 +65,7 @@ export const action = async ({ request }) => {
 
     if (customer) {
 
-      console.log("Customer exists → add 500 points");
+      console.log("➕ Customer exists → adding 500 coins");
 
       customer = await prisma.premiumCustomer.update({
         where: { email },
@@ -52,23 +78,23 @@ export const action = async ({ request }) => {
 
     } else {
 
-      console.log("Creating new customer");
+      console.log("🆕 Creating new customer");
 
       customer = await prisma.premiumCustomer.create({
         data: {
+          shopifyId: customerId,
           email,
-          shopifyId: id,
           coins: 500
         }
       });
 
     }
 
-    console.log("Total coins:", customer.coins);
+    console.log("💰 Customer coins:", customer.coins);
 
-    /* -------------------------
+    /* -----------------------
        FIND DISCOUNT RULE
-    -------------------------- */
+    ----------------------- */
 
     const rule = await prisma.premiumPointRule.findFirst({
       where: {
@@ -83,10 +109,11 @@ export const action = async ({ request }) => {
 
     if (!rule) {
 
-      console.log("No rule matched");
+      console.log("⚠️ No rule found");
 
       return new Response(JSON.stringify({
-        success: true
+        success: true,
+        coins: customer.coins
       }), {
         headers: { "Content-Type": "application/json" }
       });
@@ -95,50 +122,42 @@ export const action = async ({ request }) => {
 
     const discountAmount = rule.discount;
 
-    console.log("Discount:", discountAmount);
+    console.log("🎯 Discount rule matched:", discountAmount);
 
-    /* -------------------------
-       AUTHENTICATE SHOPIFY
-    -------------------------- */
-
-    const session = await prisma.session.findFirst({
-      where: { shop }
-    });
-
-    if (!session) {
-      throw new Error("Shop not installed");
-    }
-
-    const admin = new shopify.clients.Graphql({ session });
-
-    /* -------------------------
+    /* -----------------------
        DISCOUNT CODE
-    -------------------------- */
+    ----------------------- */
 
-    const discountCode = `VIP-${id}`;
+    const discountCode = `VIP-${customerId}`;
 
-    console.log("Discount code:", discountCode);
+    console.log("🏷 Discount code:", discountCode);
 
-    /* -------------------------
+    /* -----------------------
        CREATE DISCOUNT
-    -------------------------- */
+    ----------------------- */
 
-    const response = await admin.query({
-      data: {
-        query: `
-        mutation discountCreate($input: DiscountCodeBasicInput!) {
-          discountCodeBasicCreate(basicCodeDiscount: $input) {
-            userErrors {
-              field
-              message
-            }
+    const response = await admin.graphql(
+
+      `mutation discountCreate($input: DiscountCodeBasicInput!) {
+
+        discountCodeBasicCreate(basicCodeDiscount: $input) {
+
+          userErrors {
+            field
+            message
           }
+
         }
-        `,
+
+      }`,
+
+      {
         variables: {
+
           input: {
 
             title: discountCode,
+
             code: discountCode,
 
             startsAt: new Date().toISOString(),
@@ -156,41 +175,77 @@ export const action = async ({ request }) => {
               },
 
               value: {
+
                 discountAmount: {
+
                   amount: discountAmount.toString(),
+
                   appliesOnEachItem: false
+
                 }
+
               }
+
             },
 
-            usageLimit: 1
+            usageLimit: 1,
+
+            combinesWith: {
+
+              shippingDiscounts: true,
+
+              orderDiscounts: false,
+
+              productDiscounts: false
+
+            }
+
           }
+
         }
+
       }
-    });
 
-    const result = response.body;
+    );
 
-    console.log("Shopify result:", result);
+    const result = await response.json();
+
+    console.log("📦 Shopify response:", result);
+
+    /* -----------------------
+       RETURN SUCCESS
+    ----------------------- */
 
     return new Response(JSON.stringify({
 
       success: true,
+
       coins: customer.coins,
+
       discount: discountAmount,
+
       code: discountCode
 
     }), {
-      headers: { "Content-Type": "application/json" }
+
+      headers: {
+
+        "Content-Type": "application/json"
+
+      }
+
     });
 
   } catch (error) {
 
-    console.error("❌ Error:", error);
+    console.error("❌ Premium loyalty error:", error);
 
     return new Response(JSON.stringify({
+
       error: "Server error"
+
     }), { status: 500 });
 
   }
+
 };
