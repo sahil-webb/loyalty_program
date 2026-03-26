@@ -6,55 +6,58 @@ const prisma = new PrismaClient();
 export const action = async ({ request }) => {
   try {
 
-    /* -----------------------
-       GET SHOPIFY ADMIN CLIENT
-    ------------------------*/
+    console.log("🚀 API triggered");
+
     const { admin } = await authenticate.admin(request);
 
     const body = await request.json();
 
     const secret = body.secret;
     const email = body.email;
+    const rawCustomerId = body.customer_id;
+
+    console.log("📩 Incoming data:", body);
 
     /* -----------------------
        VALIDATE SECRET
     ------------------------*/
 
     if (secret !== "premium_customer") {
+      console.log("❌ Invalid secret");
       return new Response("Unauthorized", { status: 401 });
     }
 
-    /* -----------------------
-       EXTRACT CUSTOMER ID
-    ------------------------*/
-
-    let rawCustomerId = body.customer_id;
-
-    if (!rawCustomerId) {
-      return new Response("Customer ID missing", { status: 400 });
+    if (!email) {
+      console.log("❌ Email missing");
+      return new Response("Email missing", { status: 400 });
     }
 
-    const customerId = rawCustomerId.split("/").pop();
+    const customerId = rawCustomerId?.split("/").pop();
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
+    console.log("👤 Shopify Customer ID:", customerId);
+    console.log("📧 Email:", email);
+
     /* -----------------------
-       CREATE OR UPDATE CUSTOMER
+       CHECK CUSTOMER IN DB
     ------------------------*/
 
-    let customer;
+    console.log("🔎 Checking if customer exists");
 
-    const existingCustomer = await prisma.premiumCustomer.findUnique({
-      where: {
-        shopifyId: String(customerId)
-      }
+    let customer = await prisma.premiumCustomer.findUnique({
+      where: { email: email }
     });
 
-    if (existingCustomer) {
+    /* -----------------------
+       ADD OR CREATE CUSTOMER
+    ------------------------*/
+
+    if (customer) {
+
+      console.log("➕ Customer exists, adding 500 coins");
 
       customer = await prisma.premiumCustomer.update({
-        where: {
-          shopifyId: String(customerId)
-        },
+        where: { email: email },
         data: {
           coins: {
             increment: 500
@@ -63,6 +66,8 @@ export const action = async ({ request }) => {
       });
 
     } else {
+
+      console.log("🆕 Creating new customer");
 
       customer = await prisma.premiumCustomer.create({
         data: {
@@ -74,16 +79,18 @@ export const action = async ({ request }) => {
 
     }
 
-    const coins = customer.coins;
+    console.log("💰 Customer coins:", customer.coins);
 
     /* -----------------------
-       FIND MATCHING POINT RULE
+       FIND DISCOUNT RULE
     ------------------------*/
+
+    console.log("📊 Finding matching rule");
 
     const rule = await prisma.premiumPointRule.findFirst({
       where: {
         points: {
-          lte: coins
+          lte: customer.coins
         }
       },
       orderBy: {
@@ -92,21 +99,21 @@ export const action = async ({ request }) => {
     });
 
     if (!rule) {
-      console.log("No discount rule found");
+      console.log("⚠️ No discount rule matched");
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
     const discountAmount = rule.discount;
 
+    console.log("🎯 Discount rule matched:", discountAmount);
+
     /* -----------------------
-       DISCOUNT CODE NAME
+       CREATE DISCOUNT CODE
     ------------------------*/
 
     const discountCode = `VIP-${customerId}`;
 
-    /* -----------------------
-       CHECK EXISTING DISCOUNT
-    ------------------------*/
+    console.log("🔍 Checking existing discount:", discountCode);
 
     const discountCheck = await admin.graphql(`
       query {
@@ -123,7 +130,9 @@ export const action = async ({ request }) => {
     const discountData = await discountCheck.json();
 
     const discountNode =
-      discountData.data.codeDiscountNodes.edges[0]?.node;
+      discountData?.data?.codeDiscountNodes?.edges[0]?.node;
+
+    console.log("📦 Existing discount node:", discountNode);
 
     /* -----------------------
        CREATE DISCOUNT
@@ -133,11 +142,13 @@ export const action = async ({ request }) => {
 
       console.log("➕ Creating discount");
 
-      await admin.graphql(
+      const result = await admin.graphql(
         `
         mutation ($input: DiscountCodeBasicInput!) {
           discountCodeBasicCreate(basicCodeDiscount: $input) {
-            userErrors { message }
+            userErrors {
+              message
+            }
           }
         }
         `,
@@ -163,7 +174,6 @@ export const action = async ({ request }) => {
               },
 
               usageLimit: 1000,
-
               appliesOncePerCustomer: false,
 
               combinesWith: {
@@ -176,19 +186,19 @@ export const action = async ({ request }) => {
         }
       );
 
-    } else {
+      console.log("✅ Discount create response:", await result.json());
 
-      /* -----------------------
-         UPDATE DISCOUNT
-      ------------------------*/
+    } else {
 
       console.log("✏️ Updating discount");
 
-      await admin.graphql(
+      const result = await admin.graphql(
         `
         mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
           discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
-            userErrors { message }
+            userErrors {
+              message
+            }
           }
         }
         `,
@@ -210,26 +220,27 @@ export const action = async ({ request }) => {
         }
       );
 
+      console.log("✅ Discount update response:", await result.json());
+
     }
+
+    console.log("🎉 Process completed");
 
     return new Response(
       JSON.stringify({
         success: true,
-        coins: coins,
-        discount: discountAmount,
-        code: discountCode
+        coins: customer.coins,
+        discount: discountAmount
       }),
       { status: 200 }
     );
 
   } catch (error) {
 
-    console.error("Premium loyalty error:", error);
+    console.error("❌ Premium loyalty error:", error);
 
     return new Response(
-      JSON.stringify({
-        error: "Server error"
-      }),
+      JSON.stringify({ error: "Server error" }),
       { status: 500 }
     );
 
