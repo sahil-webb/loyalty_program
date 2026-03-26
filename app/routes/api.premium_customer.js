@@ -1,7 +1,43 @@
 import { PrismaClient } from "@prisma/client";
-import { authenticate } from "../shopify.server";
 
 const prisma = new PrismaClient();
+
+/* ========================================================
+   ENV VARIABLES
+======================================================== */
+
+const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
+const ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+const FLOW_SECRET = process.env.FLOW_SECRET;
+
+if (!SHOP || !ACCESS_TOKEN) {
+  throw new Error("❌ Missing Shopify environment variables");
+}
+
+/* ========================================================
+   SHOPIFY GRAPHQL HELPER
+======================================================== */
+
+async function shopifyGraphQL(query, variables = {}) {
+
+  const response = await fetch(
+    `https://${SHOP}/admin/api/2024-04/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": ACCESS_TOKEN
+      },
+      body: JSON.stringify({ query, variables })
+    }
+  );
+
+  return response.json();
+}
+
+/* ========================================================
+   API ROUTE
+======================================================== */
 
 export const action = async ({ request }) => {
 
@@ -19,7 +55,7 @@ export const action = async ({ request }) => {
        SECRET VALIDATION
     ----------------------- */
 
-    if (secret !== "premium_customer") {
+    if (secret !== FLOW_SECRET) {
 
       console.log("❌ Invalid secret");
 
@@ -27,26 +63,16 @@ export const action = async ({ request }) => {
 
     }
 
-    if (!email || !customer_id || !shop) {
+    if (!email || !customer_id) {
 
-      console.log("❌ Missing required data");
+      console.log("❌ Missing required fields");
 
       return new Response("Missing data", { status: 400 });
 
     }
 
     /* -----------------------
-       AUTHENTICATE SHOPIFY
-    ----------------------- */
-
-    console.log("🔐 Authenticating Shopify Admin");
-
-    const { admin } = await authenticate.admin(request, { shop });
-
-    console.log("✅ Admin authenticated");
-
-    /* -----------------------
-       CUSTOMER ID FORMAT
+       CUSTOMER ID
     ----------------------- */
 
     const customerId = customer_id.split("/").pop();
@@ -65,7 +91,7 @@ export const action = async ({ request }) => {
 
     if (customer) {
 
-      console.log("➕ Customer exists → adding 500 coins");
+      console.log("➕ Existing customer → +500 coins");
 
       customer = await prisma.premiumCustomer.update({
         where: { email },
@@ -82,8 +108,8 @@ export const action = async ({ request }) => {
 
       customer = await prisma.premiumCustomer.create({
         data: {
-          shopifyId: customerId,
           email,
+          shopifyId: customerId,
           coins: 500
         }
       });
@@ -109,7 +135,7 @@ export const action = async ({ request }) => {
 
     if (!rule) {
 
-      console.log("⚠️ No rule found");
+      console.log("⚠️ No discount rule found");
 
       return new Response(JSON.stringify({
         success: true,
@@ -136,7 +162,7 @@ export const action = async ({ request }) => {
        CREATE DISCOUNT
     ----------------------- */
 
-    const response = await admin.graphql(
+    const result = await shopifyGraphQL(
 
       `mutation discountCreate($input: DiscountCodeBasicInput!) {
 
@@ -152,63 +178,54 @@ export const action = async ({ request }) => {
       }`,
 
       {
-        variables: {
+        input: {
 
-          input: {
+          title: discountCode,
 
-            title: discountCode,
+          code: discountCode,
 
-            code: discountCode,
+          startsAt: new Date().toISOString(),
 
-            startsAt: new Date().toISOString(),
+          customerSelection: {
+            customers: {
+              add: [shopifyCustomerId]
+            }
+          },
 
-            customerSelection: {
-              customers: {
-                add: [shopifyCustomerId]
-              }
+          customerGets: {
+
+            items: {
+              all: true
             },
 
-            customerGets: {
+            value: {
 
-              items: {
-                all: true
-              },
+              discountAmount: {
 
-              value: {
+                amount: discountAmount.toString(),
 
-                discountAmount: {
-
-                  amount: discountAmount.toString(),
-
-                  appliesOnEachItem: false
-
-                }
+                appliesOnEachItem: false
 
               }
-
-            },
-
-            usageLimit: 1,
-
-            combinesWith: {
-
-              shippingDiscounts: true,
-
-              orderDiscounts: false,
-
-              productDiscounts: false
 
             }
+
+          },
+
+          usageLimit: 1,
+
+          combinesWith: {
+
+            shippingDiscounts: true,
+            orderDiscounts: false,
+            productDiscounts: false
 
           }
 
         }
-
       }
 
     );
-
-    const result = await response.json();
 
     console.log("📦 Shopify response:", result);
 
@@ -219,19 +236,14 @@ export const action = async ({ request }) => {
     return new Response(JSON.stringify({
 
       success: true,
-
       coins: customer.coins,
-
       discount: discountAmount,
-
       code: discountCode
 
     }), {
 
       headers: {
-
         "Content-Type": "application/json"
-
       }
 
     });
@@ -241,9 +253,7 @@ export const action = async ({ request }) => {
     console.error("❌ Premium loyalty error:", error);
 
     return new Response(JSON.stringify({
-
       error: "Server error"
-
     }), { status: 500 });
 
   }
