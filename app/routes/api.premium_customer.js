@@ -1,15 +1,20 @@
 import { PrismaClient } from "@prisma/client";
+import { authenticate } from "../shopify.server";
 
 const prisma = new PrismaClient();
 
 export const action = async ({ request }) => {
   try {
 
+    /* -----------------------
+       GET SHOPIFY ADMIN CLIENT
+    ------------------------*/
+    const { admin } = await authenticate.admin(request);
+
     const body = await request.json();
 
     const secret = body.secret;
     const email = body.email;
-    const rawCustomerId = body.customer_id;
 
     /* -----------------------
        VALIDATE SECRET
@@ -18,6 +23,12 @@ export const action = async ({ request }) => {
     if (secret !== "premium_customer") {
       return new Response("Unauthorized", { status: 401 });
     }
+
+    /* -----------------------
+       EXTRACT CUSTOMER ID
+    ------------------------*/
+
+    let rawCustomerId = body.customer_id;
 
     if (!rawCustomerId) {
       return new Response("Customer ID missing", { status: 400 });
@@ -33,13 +44,17 @@ export const action = async ({ request }) => {
     let customer;
 
     const existingCustomer = await prisma.premiumCustomer.findUnique({
-      where: { shopifyId: String(customerId) }
+      where: {
+        shopifyId: String(customerId)
+      }
     });
 
     if (existingCustomer) {
 
       customer = await prisma.premiumCustomer.update({
-        where: { shopifyId: String(customerId) },
+        where: {
+          shopifyId: String(customerId)
+        },
         data: {
           coins: {
             increment: 500
@@ -59,14 +74,16 @@ export const action = async ({ request }) => {
 
     }
 
+    const coins = customer.coins;
+
     /* -----------------------
-       FIND MATCHING DISCOUNT RULE
+       FIND MATCHING POINT RULE
     ------------------------*/
 
     const rule = await prisma.premiumPointRule.findFirst({
       where: {
         points: {
-          lte: customer.coins
+          lte: coins
         }
       },
       orderBy: {
@@ -75,20 +92,20 @@ export const action = async ({ request }) => {
     });
 
     if (!rule) {
-      console.log("No rule matched");
+      console.log("No discount rule found");
       return new Response(JSON.stringify({ success: true }), { status: 200 });
     }
 
     const discountAmount = rule.discount;
 
     /* -----------------------
-       DISCOUNT CODE
+       DISCOUNT CODE NAME
     ------------------------*/
 
     const discountCode = `VIP-${customerId}`;
 
     /* -----------------------
-       CHECK IF DISCOUNT EXISTS
+       CHECK EXISTING DISCOUNT
     ------------------------*/
 
     const discountCheck = await admin.graphql(`
@@ -161,6 +178,10 @@ export const action = async ({ request }) => {
 
     } else {
 
+      /* -----------------------
+         UPDATE DISCOUNT
+      ------------------------*/
+
       console.log("✏️ Updating discount");
 
       await admin.graphql(
@@ -194,8 +215,9 @@ export const action = async ({ request }) => {
     return new Response(
       JSON.stringify({
         success: true,
-        coins: customer.coins,
-        discount: discountAmount
+        coins: coins,
+        discount: discountAmount,
+        code: discountCode
       }),
       { status: 200 }
     );
