@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
-import prisma from "../db.server";
 import { shopify } from "../shopify.server";
 
-const db = new PrismaClient();
+const prisma = new PrismaClient();
 
 export const action = async ({ request }) => {
   try {
@@ -10,12 +9,12 @@ export const action = async ({ request }) => {
     console.log("🚀 API triggered");
 
     const body = await request.json();
-
     console.log("📩 Incoming data:", body);
 
     const secret = body.secret;
     const email = body.email;
     const rawCustomerId = body.customer_id;
+    const shop = body.shop;
 
     if (secret !== "premium_customer") {
       console.log("❌ Invalid secret");
@@ -30,44 +29,39 @@ export const action = async ({ request }) => {
     const customerId = rawCustomerId?.split("/").pop();
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
-    console.log("👤 Shopify customer ID:", customerId);
-    console.log("📧 Email:", email);
+    console.log("👤 Shopify customer:", customerId);
 
-    /* -----------------------------
-       GET OFFLINE ADMIN SESSION
-    ------------------------------*/
+    /* -----------------------
+       LOAD OFFLINE SESSION
+    ------------------------*/
 
-    console.log("🔑 Fetching offline Shopify session");
-
-    const session = await prisma.session.findFirst({
-      where: { isOnline: false }
-    });
+    const session = await shopify.sessionStorage.loadSession(
+      `offline_${shop}`
+    );
 
     if (!session) {
-      console.log("❌ No Shopify session found");
-      throw new Error("Offline session missing");
+      console.log("❌ No offline session found");
+      return new Response("No session", { status: 500 });
     }
 
-    const admin = new shopify.clients.Graphql({ session });
+    const client = new shopify.clients.Graphql({ session });
 
-    console.log("✅ Admin client created");
+    console.log("✅ Admin client ready");
 
-    /* -----------------------------
-       CHECK CUSTOMER IN DATABASE
-    ------------------------------*/
+    /* -----------------------
+       CUSTOMER DB LOGIC
+    ------------------------*/
 
-    console.log("🔎 Checking customer in DB");
-
-    let customer = await db.premiumCustomer.findUnique({
-      where: { email: email }
+    let customer = await prisma.premiumCustomer.findUnique({
+      where: { email }
     });
 
     if (customer) {
 
-      console.log("➕ Customer exists → adding 500 coins");
+      console.log("➕ Adding coins");
 
-      customer = await db.premiumCustomer.update({
-        where: { email: email },
+      customer = await prisma.premiumCustomer.update({
+        where: { email },
         data: {
           coins: {
             increment: 500
@@ -77,31 +71,27 @@ export const action = async ({ request }) => {
 
     } else {
 
-      console.log("🆕 Creating new customer");
+      console.log("🆕 Creating customer");
 
-      customer = await db.premiumCustomer.create({
+      customer = await prisma.premiumCustomer.create({
         data: {
           shopifyId: String(customerId),
-          email: email,
+          email,
           coins: 500
         }
       });
 
     }
 
-    console.log("💰 Customer coins:", customer.coins);
+    console.log("💰 Coins:", customer.coins);
 
-    /* -----------------------------
-       FIND DISCOUNT RULE
-    ------------------------------*/
+    /* -----------------------
+       FIND RULE
+    ------------------------*/
 
-    console.log("📊 Finding rule from PremiumPointRule");
-
-    const rule = await db.premiumPointRule.findFirst({
+    const rule = await prisma.premiumPointRule.findFirst({
       where: {
-        points: {
-          lte: customer.coins
-        }
+        points: { lte: customer.coins }
       },
       orderBy: {
         points: "desc"
@@ -110,30 +100,26 @@ export const action = async ({ request }) => {
 
     if (!rule) {
       console.log("⚠️ No rule matched");
-      return new Response(JSON.stringify({ success: true }), { status: 200 });
+      return new Response(JSON.stringify({ success: true }));
     }
 
     const discountAmount = rule.discount;
 
-    console.log("🎯 Matched rule:", rule.points, "→ $", discountAmount);
-
-    /* -----------------------------
-       DISCOUNT CODE
-    ------------------------------*/
+    console.log("🎯 Discount rule:", discountAmount);
 
     const discountCode = `VIP-${customerId}`;
 
-    console.log("🔍 Checking existing discount:", discountCode);
+    /* -----------------------
+       CHECK DISCOUNT
+    ------------------------*/
 
-    const checkDiscount = await admin.query({
+    const check = await client.query({
       data: {
         query: `
           query {
             codeDiscountNodes(first:1, query:"code:${discountCode}") {
               edges {
-                node {
-                  id
-                }
+                node { id }
               }
             }
           }
@@ -142,26 +128,24 @@ export const action = async ({ request }) => {
     });
 
     const discountNode =
-      checkDiscount?.body?.data?.codeDiscountNodes?.edges[0]?.node;
+      check.body.data.codeDiscountNodes.edges[0]?.node;
 
-    console.log("📦 Existing discount:", discountNode);
+    console.log("🔍 Discount node:", discountNode);
 
-    /* -----------------------------
+    /* -----------------------
        CREATE DISCOUNT
-    ------------------------------*/
+    ------------------------*/
 
     if (!discountNode) {
 
       console.log("➕ Creating discount");
 
-      const result = await admin.query({
+      await client.query({
         data: {
           query: `
             mutation ($input: DiscountCodeBasicInput!) {
               discountCodeBasicCreate(basicCodeDiscount: $input) {
-                userErrors {
-                  message
-                }
+                userErrors { message }
               }
             }
           `,
@@ -186,7 +170,6 @@ export const action = async ({ request }) => {
               },
 
               usageLimit: 1000,
-              appliesOncePerCustomer: false,
 
               combinesWith: {
                 shippingDiscounts: true,
@@ -198,20 +181,16 @@ export const action = async ({ request }) => {
         }
       });
 
-      console.log("✅ Discount create result:", result.body);
-
     } else {
 
       console.log("✏️ Updating discount");
 
-      const result = await admin.query({
+      await client.query({
         data: {
           query: `
             mutation ($id: ID!, $input: DiscountCodeBasicInput!) {
               discountCodeBasicUpdate(id: $id, basicCodeDiscount: $input) {
-                userErrors {
-                  message
-                }
+                userErrors { message }
               }
             }
           `,
@@ -232,29 +211,23 @@ export const action = async ({ request }) => {
         }
       });
 
-      console.log("✅ Discount update result:", result.body);
-
     }
 
-    console.log("🎉 Process finished");
+    console.log("🎉 Done");
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        coins: customer.coins,
-        discount: discountAmount
-      }),
-      { status: 200 }
-    );
+    return new Response(JSON.stringify({
+      success: true,
+      coins: customer.coins,
+      discount: discountAmount
+    }));
 
   } catch (error) {
 
     console.error("❌ Premium loyalty error:", error);
 
-    return new Response(
-      JSON.stringify({ error: "Server error" }),
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({
+      error: "Server error"
+    }), { status: 500 });
 
   }
 };
