@@ -210,7 +210,7 @@ export const action = async ({ request }) => {
 
           },
 
-          usageLimit: 1,
+          usageLimit: 1000,
 
           combinesWith: {
             shippingDiscounts: true,
