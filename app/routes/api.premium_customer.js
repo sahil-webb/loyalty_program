@@ -90,7 +90,7 @@ export const action = async ({ request }) => {
     });
 
     /* -----------------------
-       CREATE OR UPDATE
+       CREATE OR UPDATE CUSTOMER
     ----------------------- */
 
     if (customer) {
@@ -168,7 +168,7 @@ export const action = async ({ request }) => {
     console.log("🏷 Creating discount:", discountCode);
 
     /* -----------------------
-       CREATE DISCOUNT
+       CREATE DISCOUNT IN SHOPIFY
     ----------------------- */
 
     const result = await shopifyGraphQL(
@@ -224,6 +224,21 @@ export const action = async ({ request }) => {
     );
 
     console.log("📦 Shopify result:", result);
+
+    /* -----------------------
+       SAVE DISCOUNT CODE IN DATABASE
+    ----------------------- */
+
+    await prisma.premiumCustomer.update({
+      where: {
+        shopifyId: customerId
+      },
+      data: {
+        discountCode: discountCode
+      }
+    });
+
+    console.log("💾 Discount stored in database");
 
     /* -----------------------
        RESPONSE

@@ -55,11 +55,12 @@ model RewardRule {
 }
 
 model PremiumCustomer {
-  id        Int      @id @default(autoincrement())
-  shopifyId String   @unique
-  email     String?
-  coins     Int      @default(0)
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  shopifyId    String   @unique
+  email        String?
+  coins        Int      @default(0)
+  discountCode String?
+  createdAt    DateTime @default(now())
 }
 
 model RegularPointRule {
