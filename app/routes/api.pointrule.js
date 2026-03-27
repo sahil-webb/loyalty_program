@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { updateCustomerDiscounts } from "../helpers/updateCustomerDiscounts";
 
 const prisma = new PrismaClient();
 
@@ -21,7 +22,7 @@ export const loader = async () => {
 };
 
 
-/* SAVE ALL RULES */
+/* SAVE RULES */
 
 export const action = async ({ request }) => {
 
@@ -29,7 +30,7 @@ export const action = async ({ request }) => {
 
   const { regularRules, premiumRules } = body;
 
-  /* SAVE REGULAR */
+  /* SAVE REGULAR RULES */
 
   for (const rule of regularRules) {
 
@@ -44,7 +45,7 @@ export const action = async ({ request }) => {
 
   }
 
-  /* SAVE PREMIUM */
+  /* SAVE PREMIUM RULES */
 
   for (const rule of premiumRules) {
 
@@ -59,6 +60,14 @@ export const action = async ({ request }) => {
 
   }
 
-  return new Response(JSON.stringify({ success: true }));
+  /* RUN DISCOUNT UPDATE */
+
+  await updateCustomerDiscounts();
+
+  return new Response(JSON.stringify({
+    success: true
+  }), {
+    headers: { "Content-Type": "application/json" }
+  });
 
 };
