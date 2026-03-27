@@ -23,6 +23,7 @@ export default function CustomersPage() {
         c.email,
         c.birthday || "-",
         c.points,
+        c.discountCode,
         new Date(c.createdAt).toLocaleDateString()
       ]);
 
@@ -47,6 +48,7 @@ export default function CustomersPage() {
             "text",
             "text",
             "numeric",
+            "text",
             "text"
           ]}
           headings={[
@@ -56,6 +58,7 @@ export default function CustomersPage() {
             "Email",
             "Birthday",
             "Points",
+            "Discount",
             "Created"
           ]}
           rows={rows}
