@@ -41,6 +41,7 @@ model RewardCustomer {
   lastName   String
   email      String
   birthday   String?
+  discountCode String?
   points     Int      @default(0)
   createdAt  DateTime @default(now())
 }
