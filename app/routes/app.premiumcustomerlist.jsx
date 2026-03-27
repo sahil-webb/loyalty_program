@@ -21,6 +21,7 @@ export default function PremiumCustomersPage() {
         c.shopifyId,
         c.email,
         c.coins,
+        c.discountCode,
         new Date(c.createdAt).toLocaleDateString()
       ]);
 
@@ -43,6 +44,7 @@ export default function PremiumCustomersPage() {
             "text",
             "text",
             "numeric",
+            "text",
             "text"
           ]}
           headings={[
@@ -50,7 +52,8 @@ export default function PremiumCustomersPage() {
             "Shopify Customer ID",
             "Email",
             "coins",
-            "Created"
+            "Created",
+            "Discount"
           ]}
           rows={rows}
         />
