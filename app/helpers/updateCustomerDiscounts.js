@@ -216,7 +216,7 @@ export async function updateCustomerDiscounts() {
             }
           },
 
-          usageLimit: 1
+          usageLimit: 1000
         }
       }
     );
