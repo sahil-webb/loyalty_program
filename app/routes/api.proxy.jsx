@@ -102,6 +102,15 @@ export async function action({ request }) {
     console.log("✅ Shopify Customer Created:", shopifyCustomerId);
 
     /* -------------------------
+       GENERATE DISCOUNT CODE
+    ------------------------- */
+
+    const discountCode =
+      "PTS-" + email.split("@")[0].toUpperCase();
+
+    console.log("🎟️ Discount Code:", discountCode);
+
+    /* -------------------------
        STORE CUSTOMER IN PRISMA
     ------------------------- */
 
@@ -113,11 +122,12 @@ export async function action({ request }) {
         lastName: last_name,
         email,
         birthday,
-        points: 500
+        points: 500,
+        discountCode: discountCode
       }
     });
 
-    console.log("📦 Customer Stored in DB");
+    console.log("📦 Customer Stored in DB with Discount Code");
 
     /* -------------------------
        GET RULE FROM TABLE
@@ -142,15 +152,6 @@ export async function action({ request }) {
 
     console.log("🎯 Rule matched:", rule);
     console.log("💰 Discount amount:", discountAmount);
-
-    /* -------------------------
-       GENERATE DISCOUNT CODE
-    ------------------------- */
-
-    const discountCode =
-      "PTS-" + email.split("@")[0].toUpperCase();
-
-    console.log("🎟️ Discount Code:", discountCode);
 
     /* -------------------------
        SEARCH DISCOUNT CODE

@@ -52,8 +52,9 @@ export default function PremiumCustomersPage() {
             "Shopify Customer ID",
             "Email",
             "coins",
-            "Created",
-            "Discount"
+            "Discount",
+            "Created"
+           
           ]}
           rows={rows}
         />
