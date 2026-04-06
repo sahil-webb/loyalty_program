@@ -11,7 +11,7 @@ export async function action({ request }) {
 
     const body = await request.json();
 
-    const { first_name, last_name, email, birthday, password } = body;
+    const { first_name, last_name, email, birthday, password, referral } = body;
 
     const url = new URL(request.url);
     const shop = url.searchParams.get("shop");
@@ -21,6 +21,30 @@ export async function action({ request }) {
         success: false,
         message: "Shop missing"
       }));
+    }
+
+    /* -------------------------
+       GENERATE UNIQUE REFERRAL CODE
+    ------------------------- */
+
+    const generateReferralCode = () => {
+      const namePart = first_name.substring(0,3).toUpperCase();
+      const randomPart = Math.random().toString(36).substring(2,7).toUpperCase();
+      return namePart + randomPart;
+    };
+
+    let referralCode = generateReferralCode();
+
+    let signInWithReferral = false;
+    let signInReferralCode = null;
+
+    if (referral && referral.trim() !== "") {
+      signInWithReferral = true;
+      signInReferralCode = referral;
+
+      console.log("🎁 Referral used:", referral);
+    } else {
+      console.log("➡️ No referral used");
     }
 
     /* -------------------------
@@ -123,11 +147,47 @@ export async function action({ request }) {
         email,
         birthday,
         points: 500,
-        discountCode: discountCode
+        discountCode: discountCode,
+        referralCode: referralCode,
+        signInWithReferral: signInWithReferral,
+        signInReferralCode: signInReferralCode
       }
     });
 
-    console.log("📦 Customer Stored in DB with Discount Code");
+    console.log("📦 Customer Stored in DB");
+
+    /* -------------------------
+       GIVE POINTS TO REFERRER
+    ------------------------- */
+
+    if (signInWithReferral && signInReferralCode) {
+
+      const referrer = await prisma.rewardCustomer.findFirst({
+        where: {
+          referralCode: signInReferralCode
+        }
+      });
+
+      if (referrer) {
+
+        await prisma.rewardCustomer.update({
+          where: {
+            id: referrer.id
+          },
+          data: {
+            points: referrer.points + 200
+          }
+        });
+
+        console.log("🎉 Referrer rewarded with 200 points:", referrer.email);
+
+      } else {
+
+        console.log("⚠️ Referral code not found");
+
+      }
+
+    }
 
     /* -------------------------
        GET RULE FROM TABLE
@@ -230,9 +290,7 @@ export async function action({ request }) {
               }
             },
             customerGets: {
-              items: {
-                all: true
-              },
+              items: { all: true },
               value: {
                 discountAmount: {
                   amount: String(discountAmount),
@@ -265,7 +323,8 @@ export async function action({ request }) {
         success: true,
         points: customer.points,
         discount: discountCode,
-        discountAmount
+        discountAmount,
+        referralCode: referralCode
       }),
       {
         headers: {
