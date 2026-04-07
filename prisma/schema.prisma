@@ -34,16 +34,25 @@ model Session {
 }
 
 model RewardCustomer {
-  id         Int      @id @default(autoincrement())
-  shop       String
-  shopifyId  String
-  firstName  String
-  lastName   String
-  email      String
-  birthday   String?
-  discountCode String?
-  points     Int      @default(0)
-  createdAt  DateTime @default(now())
+  id                 Int      @id @default(autoincrement())
+  shop               String
+  shopifyId          String
+  firstName          String
+  lastName           String
+  email              String
+  birthday           String?
+  discountCode       String?
+  points             Int      @default(0)
+
+  referralCode       String?
+  signInWithReferral Boolean  @default(false)
+  signInReferralCode String?
+
+  tier               String   @default("insider")
+
+  lastVisitReward    DateTime?
+
+  createdAt          DateTime @default(now())
 }
 
 model RewardRule {
@@ -55,13 +64,20 @@ model RewardRule {
   updatedAt      DateTime @updatedAt
 }
 
+
+
 model PremiumCustomer {
-  id           Int      @id @default(autoincrement())
-  shopifyId    String   @unique
-  email        String?
-  coins        Int      @default(0)
-  discountCode String?
-  createdAt    DateTime @default(now())
+  id                 Int      @id @default(autoincrement())
+  shopifyId          String   @unique
+  email              String?
+  coins              Int      @default(0)
+  discountCode       String?
+
+  referralCode       String?
+  signInWithReferral Boolean  @default(false)
+  signInReferralCode String?
+
+  createdAt          DateTime @default(now())
 }
 
 model RegularPointRule {
