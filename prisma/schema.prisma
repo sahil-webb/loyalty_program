@@ -10,7 +10,7 @@ generator client {
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
-  url      = "file:/dev.db"
+  url      = "file:dev.db"
 }
 
 model Session {
@@ -76,21 +76,18 @@ model RewardRule {
 
 model PremiumCustomer {
   id                 Int      @id @default(autoincrement())
-
   shop               String
   shopifyId          String
-
   email              String?
 
   coins              Int      @default(0)
   discountCode       String?
 
-  referralCode       String?
+  referralCode       String?  @unique
   signInWithReferral Boolean  @default(false)
   signInReferralCode String?
 
   tier               String   @default("insider")
-
   lastVisitReward    DateTime?
 
   createdAt          DateTime @default(now())
