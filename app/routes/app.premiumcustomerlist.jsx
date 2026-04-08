@@ -17,14 +17,17 @@ export default function PremiumCustomersPage() {
       const res = await fetch("/api/premiumcustomerlist");
       const data = await res.json();
 
+      // keep shop + host params so Shopify doesn't ask login again
+      const params = window.location.search;
+
       const formatted = data.map((c) => [
         c.id,
         c.shopifyId,
-        <Link url={`/app/premiumcustomer/${c.id}`} removeUnderline>
+        <Link url={`/app/premiumcustomer/${c.id}${params}`} removeUnderline>
           {c.email}
         </Link>,
         c.coins,
-        c.discountCode,
+        c.discountCode || "-",
         new Date(c.createdAt).toLocaleDateString()
       ]);
 
