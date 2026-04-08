@@ -133,3 +133,13 @@ model PremiumPointRule {
   discount  Int
   createdAt DateTime @default(now())
 }
+
+enum TransactionType {
+  SIGNUP
+  ORDER
+  REVIEW
+  REFERRAL
+  REDEEM
+  ADMIN
+  VISIT
+}
