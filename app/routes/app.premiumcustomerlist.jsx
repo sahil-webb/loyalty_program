@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Page,
   Card,
-  DataTable,
-  Link
+  DataTable
 } from "@shopify/polaris";
 
 export default function PremiumCustomersPage() {
@@ -52,9 +51,10 @@ export default function PremiumCustomersPage() {
             "ID",
             "Shopify Customer ID",
             "Email",
-            "Coins",
+            "coins",
             "Discount",
             "Created"
+           
           ]}
           rows={rows}
         />
