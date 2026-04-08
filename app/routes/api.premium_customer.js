@@ -77,7 +77,7 @@ export const action = async ({ request }) => {
 
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
-    console.log("👤 Customer:", customerId);
+    console.log("👤 Customerr:", customerId);
 
     /* -----------------------
        FIND CUSTOMER
