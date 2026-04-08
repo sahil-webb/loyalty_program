@@ -23,7 +23,7 @@ export default function PremiumCustomersPage() {
       const formatted = data.map((c) => [
         c.id,
         c.shopifyId,
-        <Link url={`/app/premiumcustomer/${c.id}${params}`} removeUnderline>
+        <Link url={`/app/premiumcustomer/${c.shopifyId}${params}`} removeUnderline>
           {c.email}
         </Link>,
         c.coins,
