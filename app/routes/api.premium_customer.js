@@ -36,6 +36,35 @@ async function shopifyGraphQL(query, variables = {}) {
 }
 
 /* ========================================================
+GENERATE UNIQUE REFERRAL CODE
+======================================================== */
+
+async function generateReferralCode() {
+
+  let code;
+  let exists = true;
+
+  while (exists) {
+
+    code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    const existing = await prisma.premiumCustomer.findFirst({
+      where: {
+        referralCode: code
+      }
+    });
+
+    if (!existing) {
+      exists = false;
+    }
+
+  }
+
+  return code;
+
+}
+
+/* ========================================================
 FLOW API
 ======================================================== */
 
@@ -77,7 +106,7 @@ export const action = async ({ request }) => {
 
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
 
-    console.log("👤 Customerr:", customerId);
+    console.log("👤 Customer:", customerId);
 
     /* -----------------------
        FIND CUSTOMER
@@ -85,7 +114,10 @@ export const action = async ({ request }) => {
 
     let customer = await prisma.premiumCustomer.findUnique({
       where: {
-        shopifyId: customerId
+        shop_shopifyId: {
+          shop: SHOP,
+          shopifyId: customerId
+        }
       }
     });
 
@@ -99,7 +131,10 @@ export const action = async ({ request }) => {
 
       customer = await prisma.premiumCustomer.update({
         where: {
-          shopifyId: customerId
+          shop_shopifyId: {
+            shop: SHOP,
+            shopifyId: customerId
+          }
         },
         data: {
           coins: {
@@ -112,11 +147,23 @@ export const action = async ({ request }) => {
 
       console.log("🆕 Creating new customer");
 
+      const referralCode = await generateReferralCode();
+
       customer = await prisma.premiumCustomer.create({
         data: {
+          shop: SHOP,
           shopifyId: customerId,
           email: email ?? null,
-          coins: 500
+
+          coins: 500,
+          tier: "insider",
+
+          referralCode: referralCode,
+          signInWithReferral: false,
+          signInReferralCode: null,
+
+          discountCode: null,
+          lastVisitReward: null
         }
       });
 
@@ -231,7 +278,10 @@ export const action = async ({ request }) => {
 
     await prisma.premiumCustomer.update({
       where: {
-        shopifyId: customerId
+        shop_shopifyId: {
+          shop: SHOP,
+          shopifyId: customerId
+        }
       },
       data: {
         discountCode: discountCode
