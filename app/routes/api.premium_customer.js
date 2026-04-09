@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { addCustomerPoints } from "pointsLedger";
+import { addCustomerPoints } from "./api.pointsLedger.js";
 
 const prisma = new PrismaClient();
 
