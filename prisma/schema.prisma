@@ -132,11 +132,10 @@ model PremiumPointRule {
 }
 
 enum TransactionType {
-  SIGNUP
-  ORDER
-  REVIEW
-  REFERRAL
+  EARN
   REDEEM
-  ADMIN
-  VISIT
+  REFERRAL
+  REVIEW
+  ORDER
+  ADJUSTMENT
 }
