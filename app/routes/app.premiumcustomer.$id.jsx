@@ -31,7 +31,7 @@ export default function PremiumCustomerDetail() {
   }, []);
 
   if (!customer) {
-    return <Page title="Loading..." />;
+    return <Page title="Loading customer..." />;
   }
 
   const rows = transactions.map((t) => [
@@ -50,20 +50,19 @@ export default function PremiumCustomerDetail() {
 
       <Layout>
 
+        {/* Shopify Customer Info */}
+
         <Layout.Section>
 
           <Card title="Customer Information" sectioned>
 
             <Text><b>Name:</b> {customer.firstName} {customer.lastName}</Text>
-
             <br />
 
             <Text><b>Email:</b> {customer.email}</Text>
-
             <br />
 
             <Text><b>Phone:</b> {customer.phone || "-"}</Text>
-
             <br />
 
             <Text><b>Address:</b> {customer.address || "-"}</Text>
@@ -72,33 +71,44 @@ export default function PremiumCustomerDetail() {
 
         </Layout.Section>
 
+
+        {/* Loyalty Info */}
+
         <Layout.Section>
 
-          <Card title="Loyalty Information" sectioned>
+          <Card title="Loyalty Wallet" sectioned>
 
-            <Text><b>Available Points:</b> {customer.points}</Text>
-
+            <Text><b>Coins:</b> {customer.coins}</Text>
             <br />
 
             <Text><b>Tier:</b> {customer.tier}</Text>
-
             <br />
 
             <Text><b>Referral Code:</b> {customer.referralCode || "-"}</Text>
+            <br />
 
+            <Text><b>Signed With Referral:</b> {customer.signInWithReferral ? "Yes" : "No"}</Text>
+            <br />
+
+            <Text><b>Referral Used:</b> {customer.signInReferralCode || "-"}</Text>
             <br />
 
             <Text><b>Discount Code:</b> {customer.discountCode || "-"}</Text>
-
             <br />
 
             <Text>
-              <b>Joined:</b> {new Date(customer.createdAt).toLocaleDateString()}
+              <b>Loyalty Joined:</b>{" "}
+              {customer.createdAt
+                ? new Date(customer.createdAt).toLocaleDateString()
+                : "-"}
             </Text>
 
           </Card>
 
         </Layout.Section>
+
+
+        {/* Transaction History */}
 
         <Layout.Section>
 
@@ -133,6 +143,5 @@ export default function PremiumCustomerDetail() {
       </Layout>
 
     </Page>
-
   );
 }
