@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { addCustomerPoints } from "pointsLedger";
 
 const prisma = new PrismaClient();
 
@@ -33,10 +34,11 @@ async function shopifyGraphQL(query, variables = {}) {
   );
 
   return response.json();
+
 }
 
 /* ========================================================
-GENERATE UNIQUE REFERRAL CODE
+GENERATE REFERRAL CODE
 ======================================================== */
 
 async function generateReferralCode() {
@@ -49,14 +51,10 @@ async function generateReferralCode() {
     code = Math.random().toString(36).substring(2, 8).toUpperCase();
 
     const existing = await prisma.premiumCustomer.findFirst({
-      where: {
-        referralCode: code
-      }
+      where: { referralCode: code }
     });
 
-    if (!existing) {
-      exists = false;
-    }
+    if (!existing) exists = false;
 
   }
 
@@ -76,41 +74,19 @@ export const action = async ({ request }) => {
 
     const body = await request.json();
 
-    console.log("📩 Incoming body:", body);
-
     const { email, customer_id, secret } = body;
 
-    /* -----------------------
-       SECRET VALIDATION
-    ----------------------- */
-
     if (secret !== FLOW_SECRET) {
-
-      console.log("❌ Invalid secret");
-
       return new Response("Unauthorized", { status: 401 });
-
     }
 
     if (!customer_id) {
-
       return new Response("Missing customer id", { status: 400 });
-
     }
-
-    /* -----------------------
-       CUSTOMER ID
-    ----------------------- */
 
     const customerId = customer_id.split("/").pop();
 
     const shopifyCustomerId = `gid://shopify/Customer/${customerId}`;
-
-    console.log("👤 Customer:", customerId);
-
-    /* -----------------------
-       FIND CUSTOMER
-    ----------------------- */
 
     let customer = await prisma.premiumCustomer.findUnique({
       where: {
@@ -121,29 +97,11 @@ export const action = async ({ request }) => {
       }
     });
 
-    /* -----------------------
+    /* ========================================================
        CREATE OR UPDATE CUSTOMER
-    ----------------------- */
+    ======================================================== */
 
-    if (customer) {
-
-      console.log("➕ Existing customer → +500 coins");
-
-      customer = await prisma.premiumCustomer.update({
-        where: {
-          shop_shopifyId: {
-            shop: SHOP,
-            shopifyId: customerId
-          }
-        },
-        data: {
-          coins: {
-            increment: 500
-          }
-        }
-      });
-
-    } else {
+    if (!customer) {
 
       console.log("🆕 Creating new customer");
 
@@ -155,7 +113,7 @@ export const action = async ({ request }) => {
           shopifyId: customerId,
           email: email ?? null,
 
-          coins: 500,
+          coins: 0,
           tier: "insider",
 
           referralCode: referralCode,
@@ -169,11 +127,25 @@ export const action = async ({ request }) => {
 
     }
 
+    /* ========================================================
+       ADD POINTS USING LEDGER
+    ======================================================== */
+
+    customer = await addCustomerPoints({
+
+      shop: SHOP,
+      shopifyId: customerId,
+      points: 500,
+      type: "EARN",
+      description: "Signup reward"
+
+    });
+
     console.log("💰 Total coins:", customer.coins);
 
-    /* -----------------------
+    /* ========================================================
        FIND RULE
-    ----------------------- */
+    ======================================================== */
 
     const rule = await prisma.premiumPointRule.findFirst({
 
@@ -191,8 +163,6 @@ export const action = async ({ request }) => {
 
     if (!rule) {
 
-      console.log("No rule matched");
-
       return new Response(JSON.stringify({
         success: true,
         coins: customer.coins
@@ -204,21 +174,13 @@ export const action = async ({ request }) => {
 
     const discountAmount = rule.discount;
 
-    console.log("🎯 Discount:", discountAmount);
-
-    /* -----------------------
-       DISCOUNT CODE
-    ----------------------- */
-
     const discountCode = `VIP-${customerId}`;
 
-    console.log("🏷 Creating discount:", discountCode);
+    /* ========================================================
+       CREATE DISCOUNT
+    ======================================================== */
 
-    /* -----------------------
-       CREATE DISCOUNT IN SHOPIFY
-    ----------------------- */
-
-    const result = await shopifyGraphQL(
+    await shopifyGraphQL(
 
       `mutation discountCreate($input: DiscountCodeBasicInput!) {
         discountCodeBasicCreate(basicCodeDiscount: $input) {
@@ -233,9 +195,7 @@ export const action = async ({ request }) => {
         input: {
 
           title: discountCode,
-
           code: discountCode,
-
           startsAt: new Date().toISOString(),
 
           customerSelection: {
@@ -270,12 +230,6 @@ export const action = async ({ request }) => {
 
     );
 
-    console.log("📦 Shopify result:", result);
-
-    /* -----------------------
-       SAVE DISCOUNT CODE IN DATABASE
-    ----------------------- */
-
     await prisma.premiumCustomer.update({
       where: {
         shop_shopifyId: {
@@ -288,12 +242,6 @@ export const action = async ({ request }) => {
       }
     });
 
-    console.log("💾 Discount stored in database");
-
-    /* -----------------------
-       RESPONSE
-    ----------------------- */
-
     return new Response(JSON.stringify({
 
       success: true,
@@ -302,16 +250,14 @@ export const action = async ({ request }) => {
       code: discountCode
 
     }), {
-
       headers: {
         "Content-Type": "application/json"
       }
-
     });
 
   } catch (error) {
 
-    console.error("❌ Premium loyalty error:", error);
+    console.error("❌ Loyalty error:", error);
 
     return new Response(JSON.stringify({
       error: "Server error"
