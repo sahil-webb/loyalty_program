@@ -71,6 +71,7 @@ export default function CustomersPage() {
             "ID",
             "First Name",
             "Last Name",
+            "Shopify ID",
             "Email",
             "Birthday",
             "Points",

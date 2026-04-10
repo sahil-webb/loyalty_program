@@ -117,7 +117,7 @@ export async function action({ request }) {
       }));
     }
 
-    const shopifyCustomerId = customerData.customer.admin_graphql_api_id;
+    const shopifyCustomerId = customerData.customer.admin_graphql_api_id.split("/").pop();
 
     console.log("✅ Shopify Customer Created:", shopifyCustomerId);
 
