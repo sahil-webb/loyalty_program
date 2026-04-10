@@ -20,7 +20,9 @@ export default function CustomersPage() {
         c.id,
         c.firstName,
         c.lastName,
-        c.email,
+         <Link url={`/app/regularcustomer/${c.shopifyId}${params}`} removeUnderline>
+          {c.email}
+          </Link>,
         c.birthday || "-",
         c.points,
         c.discountCode,

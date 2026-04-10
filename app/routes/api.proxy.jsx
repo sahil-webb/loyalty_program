@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-
+import { addCustomerPoints } from "../api.pointledgerregular";
 export async function action({ request }) {
   try {
 
@@ -156,6 +156,13 @@ export async function action({ request }) {
 
     console.log("📦 Customer Stored in DB");
 
+    await addCustomerPoints({
+  shop,
+  shopifyId: shopifyCustomerId,
+  points: 500,
+  type: "EARN",
+  description: "Signup bonus reward"
+});
     /* -------------------------
        GIVE POINTS TO REFERRER
     ------------------------- */
