@@ -8,7 +8,7 @@ ADD CUSTOMER POINTS (Atomic Safe Transaction)
 ========================================================
 */
 
-export async function addCustomerPoints_regular_regular({
+export async function addCustomerPoints_regular({
   shop,
   shopifyId,
   points,
