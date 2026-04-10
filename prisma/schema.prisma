@@ -34,33 +34,30 @@ model Session {
 }
 
 model RewardCustomer {
-  id                 Int      @id @default(autoincrement())
+  id        Int @id @default(autoincrement())
 
-  shop               String
-  shopifyId          String
+  shop      String
+  shopifyId String
 
-  firstName          String
-  lastName           String
-  email              String
+  firstName String
+  lastName  String
+  email     String
 
-  birthday           String?
-  discountCode       String?
+  birthday  String?
+  discountCode String?
 
-  points             Int      @default(0)
+  points    Int @default(0)
 
-  referralCode       String?
-  signInWithReferral Boolean  @default(false)
+  referralCode String?
+  signInWithReferral Boolean @default(false)
   signInReferralCode String?
 
-  tier               String   @default("insider")
+  tier String @default("insider")
 
-  lastVisitReward    DateTime?
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([shop, shopifyId])
-  @@index([shop])
 }
 
 model RewardRule {
