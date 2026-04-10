@@ -20,7 +20,7 @@ export async function addCustomerPoints_regular({
 
   return await prisma.$transaction(async (tx) => {
 
-    const customer = await tx.RewardCustomer.findUnique({
+    const customer = await tx.rewardCustomer.findUnique({
       where: {
         shop_shopifyId: {
           shop,
@@ -33,7 +33,7 @@ export async function addCustomerPoints_regular({
       throw new Error("Customer not found");
     }
 
-    const updatedCustomer = await tx.RewardCustomer.update({
+    const updatedCustomer = await tx.rewardCustomer.update({
       where: {
         shop_shopifyId: {
           shop,
@@ -41,7 +41,7 @@ export async function addCustomerPoints_regular({
         }
       },
       data: {
-        coins: {
+        points: {
           increment: points
         }
       }
@@ -53,7 +53,7 @@ export async function addCustomerPoints_regular({
         shopifyId,
         type,
         points,
-        availablePoints: updatedCustomer.coins,
+        availablePoints: updatedCustomer.points,
         description,
         orderId,
         referralCode,
@@ -84,7 +84,7 @@ export async function redeemCustomerPoints({
 
   return await prisma.$transaction(async (tx) => {
 
-    const customer = await tx.RewardCustomer.findUnique({
+    const customer = await tx.rewardCustomer.findUnique({
       where: {
         shop_shopifyId: {
           shop,
@@ -97,11 +97,11 @@ export async function redeemCustomerPoints({
       throw new Error("Customer not found");
     }
 
-    if (customer.coins < points) {
+    if (customer.points < points) {
       throw new Error("Not enough points");
     }
 
-    const updatedCustomer = await tx.RewardCustomer.update({
+    const updatedCustomer = await tx.rewardCustomer.update({
       where: {
         shop_shopifyId: {
           shop,
@@ -109,7 +109,7 @@ export async function redeemCustomerPoints({
         }
       },
       data: {
-        coins: {
+        points: {
           decrement: points
         }
       }
@@ -121,7 +121,7 @@ export async function redeemCustomerPoints({
         shopifyId,
         type: "REDEEM",
         points: -points,
-        availablePoints: updatedCustomer.coins,
+        availablePoints: updatedCustomer.points,
         description,
         tier: updatedCustomer.tier
       }

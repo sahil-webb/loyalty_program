@@ -1,5 +1,6 @@
 import prisma from "../db.server";
 import { addCustomerPoints_regular } from "./api.pointsLedger_regular.js";
+
 export async function action({ request }) {
   try {
 
@@ -10,7 +11,6 @@ export async function action({ request }) {
     ------------------------- */
 
     const body = await request.json();
-
     const { first_name, last_name, email, birthday, password, referral } = body;
 
     const url = new URL(request.url);
@@ -24,7 +24,7 @@ export async function action({ request }) {
     }
 
     /* -------------------------
-       GENERATE UNIQUE REFERRAL CODE
+       GENERATE REFERRAL CODE
     ------------------------- */
 
     const generateReferralCode = () => {
@@ -34,14 +34,12 @@ export async function action({ request }) {
     };
 
     let referralCode = generateReferralCode();
-
     let signInWithReferral = false;
     let signInReferralCode = null;
 
     if (referral && referral.trim() !== "") {
       signInWithReferral = true;
       signInReferralCode = referral;
-
       console.log("🎁 Referral used:", referral);
     } else {
       console.log("➡️ No referral used");
@@ -63,26 +61,6 @@ export async function action({ request }) {
     }
 
     const accessToken = session.accessToken;
-
-    /* -------------------------
-       ADMIN GRAPHQL CLIENT
-    ------------------------- */
-
-    const admin = {
-      graphql: async (query, variables = {}) => {
-        return fetch(`https://${shop}/admin/api/2024-01/graphql.json`, {
-          method: "POST",
-          headers: {
-            "X-Shopify-Access-Token": accessToken,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            query,
-            variables
-          }),
-        });
-      }
-    };
 
     /* -------------------------
        CREATE SHOPIFY CUSTOMER
@@ -146,25 +124,30 @@ export async function action({ request }) {
         lastName: last_name,
         email,
         birthday,
-        points: 500,
-        discountCode: discountCode,
-        referralCode: referralCode,
-        signInWithReferral: signInWithReferral,
-        signInReferralCode: signInReferralCode
+        points: 0,   // IMPORTANT: start with 0
+        discountCode,
+        referralCode,
+        signInWithReferral,
+        signInReferralCode
       }
     });
 
     console.log("📦 Customer Stored in DB");
 
-    await addCustomerPoints_regular({
-  shop,
-  shopifyId: shopifyCustomerId,
-  points: 500,
-  type: "EARN",
-  description: "Signup bonus reward"
-});
     /* -------------------------
-       GIVE POINTS TO REFERRER
+       ADD SIGNUP POINTS
+    ------------------------- */
+
+    const updatedCustomer = await addCustomerPoints_regular({
+      shop,
+      shopifyId: shopifyCustomerId,
+      points: 500,
+      type: "EARN",
+      description: "Signup bonus reward"
+    });
+
+    /* -------------------------
+       GIVE REFERRAL REWARD
     ------------------------- */
 
     if (signInWithReferral && signInReferralCode) {
@@ -182,7 +165,9 @@ export async function action({ request }) {
             id: referrer.id
           },
           data: {
-            points: referrer.points + 200
+            points: {
+              increment: 200
+            }
           }
         });
 
@@ -203,7 +188,7 @@ export async function action({ request }) {
     const rule = await prisma.regularPointRule.findFirst({
       where: {
         points: {
-          lte: customer.points
+          lte: updatedCustomer.points
         }
       },
       orderBy: {
@@ -221,117 +206,16 @@ export async function action({ request }) {
     console.log("💰 Discount amount:", discountAmount);
 
     /* -------------------------
-       SEARCH DISCOUNT CODE
-    ------------------------- */
-
-    const discountSearchRes = await admin.graphql(
-      `
-      query ($query: String!) {
-        codeDiscountNodes(first: 10, query: $query) {
-          nodes {
-            id
-            codeDiscount {
-              ... on DiscountCodeBasic {
-                codes(first: 10) {
-                  nodes {
-                    code
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      `,
-      {
-        query: `code:${discountCode}`
-      }
-    );
-
-    const discountSearchData = await discountSearchRes.json();
-
-    let discountNode = null;
-
-    const nodes =
-      discountSearchData?.data?.codeDiscountNodes?.nodes || [];
-
-    for (const node of nodes) {
-
-      const codes =
-        node?.codeDiscount?.codes?.nodes || [];
-
-      if (codes.some(c => c.code === discountCode)) {
-        discountNode = node;
-        break;
-      }
-
-    }
-
-    /* -------------------------
-       CREATE DISCOUNT IF NOT EXISTS
-    ------------------------- */
-
-    if (!discountNode) {
-
-      console.log("➕ Creating discount");
-
-      const discountCreateRes = await admin.graphql(
-        `
-        mutation ($input: DiscountCodeBasicInput!) {
-          discountCodeBasicCreate(basicCodeDiscount: $input) {
-            userErrors {
-              field
-              message
-            }
-          }
-        }
-        `,
-        {
-          input: {
-            title: discountCode,
-            code: discountCode,
-            startsAt: new Date().toISOString(),
-            customerSelection: {
-              customers: {
-                add: [shopifyCustomerId]
-              }
-            },
-            customerGets: {
-              items: { all: true },
-              value: {
-                discountAmount: {
-                  amount: String(discountAmount),
-                  appliesOnEachItem: false
-                }
-              }
-            },
-            usageLimit: 1000,
-            appliesOncePerCustomer: false
-          }
-        }
-      );
-
-      const discountCreateData = await discountCreateRes.json();
-
-      console.log("🎉 Discount Created:", discountCreateData);
-
-    } else {
-
-      console.log("⚠️ Discount already exists");
-
-    }
-
-    /* -------------------------
        FINAL RESPONSE
     ------------------------- */
 
     return new Response(
       JSON.stringify({
         success: true,
-        points: customer.points,
+        points: updatedCustomer.points,
         discount: discountCode,
         discountAmount,
-        referralCode: referralCode
+        referralCode
       }),
       {
         headers: {
