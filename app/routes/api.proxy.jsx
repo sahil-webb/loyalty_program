@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { addCustomerPoints } from "../api.pointledgerregular";
+import { addCustomerPoints } from "./api.pointsLedger_regular.js";
 export async function action({ request }) {
   try {
 
