@@ -160,7 +160,7 @@ export async function action({ request }) {
       shop,
       shopifyId: shopifyCustomerId,
       points: 0,
-      type: "SIGNUP",
+      type: "EARN",
       description: "Signup bonus",
     });
 
