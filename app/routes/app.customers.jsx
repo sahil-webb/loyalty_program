@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import {
   Page,
   Card,
-  DataTable
+  DataTable,
+  Link
 } from "@shopify/polaris";
 
 export default function CustomersPage() {
@@ -13,23 +14,34 @@ export default function CustomersPage() {
 
     async function loadCustomers() {
 
-      const res = await fetch("/api/getcustomer");
-      const data = await res.json();
+      try {
 
-      const formatted = data.map((c) => [
-        c.id,
-        c.firstName,
-        c.lastName,
-         <Link url={`/app/regularcustomer/${c.shopifyId}${params}`} removeUnderline>
-          {c.email}
+        const res = await fetch("/api/getcustomer");
+        const data = await res.json();
+
+        const customers = data.customers || [];
+
+        const formatted = customers.map((c) => [
+          c.id,
+          c.firstName,
+          c.lastName,
+          <Link url={`/app/regularcustomer/${c.shopifyId}`} removeUnderline>
+            {c.email}
           </Link>,
-        c.birthday || "-",
-        c.points,
-        c.discountCode,
-        new Date(c.createdAt).toLocaleDateString()
-      ]);
+          c.birthday || "-",
+          c.points,
+          c.discountCode || "-",
+          new Date(c.createdAt).toLocaleDateString()
+        ]);
 
-      setRows(formatted);
+        setRows(formatted);
+
+      } catch (error) {
+
+        console.error("Failed to load customers:", error);
+
+      }
+
     }
 
     loadCustomers();
