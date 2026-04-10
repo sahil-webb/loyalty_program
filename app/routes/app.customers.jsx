@@ -25,6 +25,7 @@ export default function CustomersPage() {
           c.id,
           c.firstName,
           c.lastName,
+          c.shopifyId,
           <Link url={`/app/regularcustomer/${c.shopifyId}`} removeUnderline>
             {c.email}
           </Link>,
@@ -57,6 +58,7 @@ export default function CustomersPage() {
         <DataTable
           columnContentTypes={[
             "numeric",
+            "text",
             "text",
             "text",
             "text",
