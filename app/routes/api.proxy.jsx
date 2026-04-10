@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { addCustomerPoints } from "./api.pointsLedger_regular.js";
+import { addCustomerPoints_regular } from "./api.pointsLedger_regular.js";
 export async function action({ request }) {
   try {
 
@@ -156,7 +156,7 @@ export async function action({ request }) {
 
     console.log("📦 Customer Stored in DB");
 
-    await addCustomerPoints({
+    await addCustomerPoints_regular({
   shop,
   shopifyId: shopifyCustomerId,
   points: 500,
