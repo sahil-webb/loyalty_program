@@ -20,13 +20,13 @@ export default function CustomersPage() {
         const data = await res.json();
 
         const customers = data.customers || [];
-
+        const params = window.location.search;
         const formatted = customers.map((c) => [
           c.id,
           c.firstName,
           c.lastName,
           c.shopifyId,
-          <Link url={`/app/regularcustomer/${c.shopifyId}`} removeUnderline>
+          <Link url={`/app/regularcustomer/${c.shopifyId}${params}`} removeUnderline>
             {c.email}
           </Link>,
           c.birthday || "-",
