@@ -33,19 +33,19 @@ export async function addCustomerPoints_regular({
       throw new Error("Customer not found");
     }
 
-    const updatedCustomer = await tx.rewardCustomer.update({
-      where: {
-        shop_shopifyId: {
-          shop,
-          shopifyId
-        }
-      },
-      data: {
-        points: {
-          increment: points
-        }
-      }
-    });
+    // const updatedCustomer = await tx.rewardCustomer.update({
+    //   where: {
+    //     shop_shopifyId: {
+    //       shop,
+    //       shopifyId
+    //     }
+    //   },
+    //   data: {
+    //     points: {
+    //       increment: points
+    //     }
+    //   }
+    // });
 
     await tx.rewardTransaction.create({
       data: {
