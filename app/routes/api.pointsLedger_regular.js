@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 /*
 ========================================================
-ADD CUSTOMER POINTS (Atomic Safe Transaction)
+ADD CUSTOMER POINTS (ONLY TRANSACTION - NO CUSTOMER UPDATE)
 ========================================================
 */
 
@@ -17,9 +17,9 @@ export async function addCustomerPoints_regular({
   orderId = null,
   referralCode = null
 }) {
-
   return await prisma.$transaction(async (tx) => {
 
+    // 1. Check if customer exists
     const customer = await tx.rewardCustomer.findUnique({
       where: {
         shop_shopifyId: {
@@ -33,45 +33,47 @@ export async function addCustomerPoints_regular({
       throw new Error("Customer not found");
     }
 
-    // const updatedCustomer = await tx.rewardCustomer.update({
-    //   where: {
-    //     shop_shopifyId: {
-    //       shop,
-    //       shopifyId
-    //     }
-    //   },
-    //   data: {
-    //     points: {
-    //       increment: points
-    //     }
-    //   }
-    // });
+    // 2. Calculate current balance from transactions (ledger approach)
+    const balanceData = await tx.rewardTransaction.aggregate({
+      _sum: {
+        points: true
+      },
+      where: {
+        shop,
+        shopifyId
+      }
+    });
 
-    await tx.rewardTransaction.create({
+    const currentPoints = balanceData._sum.points || 0;
+    const newBalance = currentPoints + points;
+
+    // 3. Create transaction entry
+    const transaction = await tx.rewardTransaction.create({
       data: {
         shop,
         shopifyId,
         type,
         points,
-        availablePoints: updatedCustomer.points,
+        availablePoints: newBalance,
         description,
         orderId,
         referralCode,
-        tier: updatedCustomer.tier
+        tier: customer.tier
       }
     });
 
-    console.log("💰 Points added:", points);
+    console.log("💰 Points transaction added:", {
+      added: points,
+      newBalance
+    });
 
-    return updatedCustomer;
-
+    return transaction;
   });
-
 }
 
 /*
 ========================================================
-REDEEM CUSTOMER POINTS
+REDEEM CUSTOMER POINTS (ONLY TRANSACTION - NO CUSTOMER UPDATE)
 ========================================================
 */
 
@@ -81,9 +83,9 @@ export async function redeemCustomerPoints({
   points,
   description = "Redeem reward"
 }) {
-
   return await prisma.$transaction(async (tx) => {
 
+    // 1. Check if customer exists
     const customer = await tx.rewardCustomer.findUnique({
       where: {
         shop_shopifyId: {
@@ -97,40 +99,44 @@ export async function redeemCustomerPoints({
       throw new Error("Customer not found");
     }
 
-    if (customer.points < points) {
-      throw new Error("Not enough points");
-    }
-
-    const updatedCustomer = await tx.rewardCustomer.update({
-      where: {
-        shop_shopifyId: {
-          shop,
-          shopifyId
-        }
+    // 2. Get current balance from transactions
+    const balanceData = await tx.rewardTransaction.aggregate({
+      _sum: {
+        points: true
       },
-      data: {
-        points: {
-          decrement: points
-        }
+      where: {
+        shop,
+        shopifyId
       }
     });
 
-    await tx.rewardTransaction.create({
+    const currentPoints = balanceData._sum.points || 0;
+
+    // 3. Validation
+    if (currentPoints < points) {
+      throw new Error("Not enough points");
+    }
+
+    const newBalance = currentPoints - points;
+
+    // 4. Create redeem transaction
+    const transaction = await tx.rewardTransaction.create({
       data: {
         shop,
         shopifyId,
         type: "REDEEM",
         points: -points,
-        availablePoints: updatedCustomer.points,
+        availablePoints: newBalance,
         description,
-        tier: updatedCustomer.tier
+        tier: customer.tier
       }
     });
 
-    console.log("🎁 Points redeemed:", points);
+    console.log("🎁 Points redeemed:", {
+      redeemed: points,
+      newBalance
+    });
 
-    return updatedCustomer;
-
+    return transaction;
   });
-
 }
