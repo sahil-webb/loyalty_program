@@ -164,9 +164,7 @@ export async function action({ request }) {
       description: "Signup bonus",
     });
 
-    /* -------------------------
-       GIVE POINTS TO REFERRER
-    ------------------------- */
+    /* ------------------------- GIVE POINTS TO REFERRER    ------------------------- */
 
     if (signInWithReferral && signInReferralCode) {
 
