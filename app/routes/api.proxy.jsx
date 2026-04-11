@@ -159,7 +159,7 @@ export async function action({ request }) {
     await addCustomerPoints_regular({
       shop,
       shopifyId: shopifyCustomerId,
-      points: 0,
+      points: 500,
       type: "EARN",
       description: "Signup bonus",
     });
