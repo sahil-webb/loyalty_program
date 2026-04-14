@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 // 🔐 CHANGE THIS (same as Flow header)
-const API_SECRET = "YOUR_SECRET_KEY";
+const API_SECRET = "regular_birthday_points";
 
 /*
 ========================================================
@@ -15,7 +15,7 @@ export async function action({ request }) {
   try {
     // ✅ Security check
     const apiKey = request.headers.get("x-api-key");
-
+    console.log(apiKey);
     if (apiKey !== API_SECRET) {
       return new Response(
         JSON.stringify({ success: false, message: "Unauthorized" }),
