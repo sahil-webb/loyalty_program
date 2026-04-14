@@ -2,18 +2,11 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// 🔐 CHANGE THIS (same as Flow header)
 const API_SECRET = "regular_birthday_points";
-
-/*
-========================================================
-BIRTHDAY POINTS CRON HANDLER
-========================================================
-*/
 
 export async function action({ request }) {
   try {
-    // ✅ Security check
+  
     const apiKey = request.headers.get("x-api-key");
     console.log(apiKey);
     if (apiKey !== API_SECRET) {
@@ -25,21 +18,15 @@ export async function action({ request }) {
 
     const today = new Date();
 
-    // ✅ Extract today's MM-DD
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    const todayKey = `${month}-${day}`;
+    const todayMonth = String(today.getMonth() + 1).padStart(2, "0");
+    const todayDate = String(today.getDate()).padStart(2, "0");
+    const todayKey = `${todayMonth}-${todayDate}`;
 
-    const currentYear = today.getFullYear();
+    console.log("🎂 Running birthday job for:", todayKey);
 
-    console.log("🎂 Birthday job running for:", todayKey);
-
-    // ✅ Fetch customers with birthdays
     const customers = await prisma.rewardCustomer.findMany({
       where: {
-        birthday: {
-          not: null
-        }
+        birthday: { not: null }
       }
     });
 
@@ -49,40 +36,34 @@ export async function action({ request }) {
       try {
         if (!customer.birthday) continue;
 
-        // Expecting YYYY-MM-DD
+        // Expect YYYY-MM-DD
         const parts = customer.birthday.split("-");
         if (parts.length !== 3) continue;
 
         const customerKey = `${parts[1]}-${parts[2]}`;
 
-        // 🚫 Prevent duplicate reward in same year
-        if (
-          customerKey === todayKey &&
-          customer.lastBirthdayRewardYear !== currentYear
-        ) {
+        if (customerKey === todayKey) {
           console.log(`🎉 Rewarding: ${customer.email}`);
 
-          // ✅ Atomic transaction
           await prisma.$transaction(async (tx) => {
-            // 1. Update points
+            // ➕ Add points
             await tx.rewardCustomer.update({
               where: { id: customer.id },
               data: {
                 points: {
                   increment: 100
-                },
-                lastBirthdayRewardYear: currentYear
+                }
               }
             });
 
-            // 2. Log transaction
+            // 🧾 Ledger entry
             await tx.pointLedger.create({
               data: {
                 shop: customer.shop,
                 shopifyId: customer.shopifyId,
                 points: 100,
                 type: "birthday",
-                description: "Birthday reward points"
+                description: "Birthday reward"
               }
             });
           });
@@ -94,7 +75,7 @@ export async function action({ request }) {
       }
     }
 
-    console.log(`✅ Birthday job completed. Rewarded: ${rewardedCount}`);
+    console.log(`✅ Done. Rewarded: ${rewardedCount}`);
 
     return new Response(
       JSON.stringify({
@@ -105,7 +86,7 @@ export async function action({ request }) {
     );
 
   } catch (error) {
-    console.error("🔥 Birthday job failed:", error);
+    console.error("🔥 Error:", error);
 
     return new Response(
       JSON.stringify({
