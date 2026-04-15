@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
-
+import { addCustomerPoints } from "./api.pointsLedger.js";
 const prisma = new PrismaClient();
-
+const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 /*
 ========================================================
 REWARD CUSTOMER FUNCTION (1₹ = 1 POINT)
@@ -61,6 +61,15 @@ async function addRewardCustomerOrderPoints(data) {
         }
       }
     });
+
+    // ✅ USE LEDGER INSTEAD OF DIRECT UPDATE
+        await addCustomerPoints({
+          shop: SHOP,
+          shopifyId: customer.shopifyId,
+          points: earnedCoins,
+          type: "EARN",
+          description: "Order reward"
+        });
 
     console.log("✅ Points Updated:", updatedCustomer.points);
 
