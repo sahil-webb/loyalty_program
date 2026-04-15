@@ -119,7 +119,7 @@ export const action = async ({ request }) => {
           referralCode: referralCode,
           signInWithReferral: false,
           signInReferralCode: null,
-
+          birthday: new Date("2002-04-15T00:00:00.000Z"),
           discountCode: null,
           lastVisitReward: null
         }
