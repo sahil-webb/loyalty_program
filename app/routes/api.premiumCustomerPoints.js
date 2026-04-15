@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
-
+import { addCustomerPoints } from "./api.pointsLedger.js";
 const prisma = new PrismaClient();
-
+const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 /*
 ========================================================
 PREMIUM CUSTOMER (1₹ = 2 COINS)
@@ -32,6 +32,16 @@ async function handlePremiumCustomer(email, amountSpent) {
         }
       }
     });
+    
+    // ✅ USE LEDGER INSTEAD OF DIRECT UPDATE
+    await addCustomerPoints({
+      shop: SHOP,
+      shopifyId: customer.shopifyId,
+      points: earnedCoins,
+      type: "EARN",
+      description: "Order reward"
+    });
+
 
     console.log("✅ PremiumCustomer updated:", customer.id);
 
