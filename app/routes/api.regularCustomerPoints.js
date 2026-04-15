@@ -2,18 +2,48 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-export default async function regularCustomerReward(data) {
+/*
+========================================================
+REWARD CUSTOMER ORDER POINTS (1₹ = 1 POINT)
+========================================================
+*/
 
+export async function addRewardCustomerOrderPoints(data) {
   try {
+    console.log("🚀 Function triggered");
 
-    const { email, amountSpent } = data;
+    let { email, amountSpent } = data;
 
+    console.log("📦 Raw Incoming Data:", data);
+
+    // ✅ Validate input
     if (!email || !amountSpent) {
-      console.log("Missing email or amountSpent");
+      console.log("❌ Missing email or amountSpent");
       return;
     }
 
-    const earnedPoints = Math.floor(amountSpent * 1);
+    // ✅ Clean email
+    email = email.trim().toLowerCase();
+
+    console.log("📧 Clean Email:", email);
+
+    // ✅ Convert amount to number
+    amountSpent = parseFloat(amountSpent);
+
+    console.log("💰 Parsed Amount:", amountSpent);
+
+    if (isNaN(amountSpent)) {
+      console.log("❌ Invalid amountSpent:", amountSpent);
+      return;
+    }
+
+    // ✅ 1:1 logic
+    const earnedPoints = Math.floor(amountSpent);
+
+    console.log("🎁 Points to Add:", earnedPoints);
+
+    // ✅ Find customer by email
+    console.log("🔍 Searching customer...");
 
     const customer = await prisma.rewardCustomer.findFirst({
       where: {
@@ -22,11 +52,19 @@ export default async function regularCustomerReward(data) {
     });
 
     if (!customer) {
-      console.log("Customer not found");
+      console.log("❌ Customer NOT FOUND for email:", email);
       return;
     }
 
-    await prisma.rewardCustomer.update({
+    console.log("✅ Customer Found:");
+    console.log("🆔 ID:", customer.id);
+    console.log("📧 Email:", customer.email);
+    console.log("💰 Current Points:", customer.points);
+
+    // ✅ Update points
+    console.log("⬆️ Updating points...");
+
+    const updatedCustomer = await prisma.rewardCustomer.update({
       where: {
         id: customer.id
       },
@@ -37,10 +75,14 @@ export default async function regularCustomerReward(data) {
       }
     });
 
-    console.log(`Added ${earnedPoints} points to ${email}`);
+    console.log("✅ Points Updated Successfully");
+    console.log("🎁 Points Added:", earnedPoints);
+    console.log("💰 New Total Points:", updatedCustomer.points);
+
+    return updatedCustomer;
 
   } catch (error) {
-    console.error("Regular reward error:", error);
+    console.error("🔥 ERROR in addRewardCustomerOrderPoints:");
+    console.error(error);
   }
-
 }
