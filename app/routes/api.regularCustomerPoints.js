@@ -4,19 +4,16 @@ const prisma = new PrismaClient();
 
 /*
 ========================================================
-REWARD CUSTOMER ORDER POINTS (1₹ = 1 POINT)
+REWARD CUSTOMER FUNCTION (1₹ = 1 POINT)
 ========================================================
 */
 
-export async function addRewardCustomerOrderPoints(data) {
+async function addRewardCustomerOrderPoints(data) {
   try {
-    console.log("🚀 Function triggered");
+    console.log("📦 Incoming Data:", data);
 
     let { email, amountSpent } = data;
 
-    console.log("📦 Raw Incoming Data:", data);
-
-    // ✅ Validate input
     if (!email || !amountSpent) {
       console.log("❌ Missing email or amountSpent");
       return;
@@ -25,26 +22,21 @@ export async function addRewardCustomerOrderPoints(data) {
     // ✅ Clean email
     email = email.trim().toLowerCase();
 
-    console.log("📧 Clean Email:", email);
-
-    // ✅ Convert amount to number
+    // ✅ Convert amount
     amountSpent = parseFloat(amountSpent);
-
-    console.log("💰 Parsed Amount:", amountSpent);
 
     if (isNaN(amountSpent)) {
       console.log("❌ Invalid amountSpent:", amountSpent);
       return;
     }
 
-    // ✅ 1:1 logic
+    // ✅ 1₹ = 1 point
     const earnedPoints = Math.floor(amountSpent);
 
-    console.log("🎁 Points to Add:", earnedPoints);
+    console.log("💰 Amount:", amountSpent);
+    console.log("🎁 Points:", earnedPoints);
 
-    // ✅ Find customer by email
-    console.log("🔍 Searching customer...");
-
+    // ✅ Find customer
     const customer = await prisma.rewardCustomer.findFirst({
       where: {
         email: email
@@ -52,18 +44,13 @@ export async function addRewardCustomerOrderPoints(data) {
     });
 
     if (!customer) {
-      console.log("❌ Customer NOT FOUND for email:", email);
+      console.log("❌ Customer not found:", email);
       return;
     }
 
-    console.log("✅ Customer Found:");
-    console.log("🆔 ID:", customer.id);
-    console.log("📧 Email:", customer.email);
-    console.log("💰 Current Points:", customer.points);
+    console.log("✅ Customer Found:", customer.id);
 
     // ✅ Update points
-    console.log("⬆️ Updating points...");
-
     const updatedCustomer = await prisma.rewardCustomer.update({
       where: {
         id: customer.id
@@ -75,14 +62,54 @@ export async function addRewardCustomerOrderPoints(data) {
       }
     });
 
-    console.log("✅ Points Updated Successfully");
-    console.log("🎁 Points Added:", earnedPoints);
-    console.log("💰 New Total Points:", updatedCustomer.points);
-
-    return updatedCustomer;
+    console.log("✅ Points Updated:", updatedCustomer.points);
 
   } catch (error) {
-    console.error("🔥 ERROR in addRewardCustomerOrderPoints:");
-    console.error(error);
+    console.error("🔥 Reward function error:", error);
+  }
+}
+
+/*
+========================================================
+API ROUTE (SHOPIFY FLOW CALLS THIS)
+========================================================
+*/
+
+export async function action({ request }) {
+  try {
+    console.log("🚀 API HIT /api/premiumCustomerPoints");
+
+    // ✅ Parse request body
+    const body = await request.json();
+
+    console.log("📦 BODY RECEIVED:", body);
+
+    // ✅ Call function
+    await addRewardCustomerOrderPoints(body);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Points added"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+
+  } catch (error) {
+    console.error("🔥 API ERROR:", error);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
   }
 }
