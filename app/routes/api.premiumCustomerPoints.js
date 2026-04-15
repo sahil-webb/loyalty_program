@@ -23,15 +23,6 @@ async function handlePremiumCustomer(email, amountSpent) {
       console.log("❌ PremiumCustomer not found");
       return;
     }
-
-    await prisma.premiumCustomer.update({
-      where: { id: customer.id },
-      data: {
-        coins: {
-          increment: earnedCoins
-        }
-      }
-    });
     
     // ✅ USE LEDGER INSTEAD OF DIRECT UPDATE
     await addCustomerPoints({
