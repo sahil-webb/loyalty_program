@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { addCustomerPoints } from "./api.pointsLedger.js";
+import { addCustomerPoints_regular } from "./api.pointsLedger_regular.js";
 const prisma = new PrismaClient();
 const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 /*
@@ -64,7 +64,7 @@ async function addRewardCustomerOrderPoints(data) {
     console.log(customer.shopifyId);
     console.log(customer.id);
     // ✅ USE LEDGER INSTEAD OF DIRECT UPDATE
-        await addCustomerPoints({
+        await addCustomerPoints_regular({
           shop: SHOP,
           shopifyId: customer.shopifyId,
           points: earnedPoints,
