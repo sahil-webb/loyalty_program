@@ -66,7 +66,7 @@ async function addRewardCustomerOrderPoints(data) {
         await addCustomerPoints({
           shop: SHOP,
           shopifyId: customer.shopifyId,
-          points: earnedCoins,
+          points: earnedPoints,
           type: "EARN",
           description: "Order reward"
         });
