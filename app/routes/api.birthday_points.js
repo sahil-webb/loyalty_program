@@ -17,15 +17,16 @@ export async function action({ request }) {
 
     const today = new Date();
 
-    const todayMonth = String(today.getMonth() + 1).padStart(2, "0");
-    const todayDate = String(today.getDate()).padStart(2, "0");
-    const todayKey = `${todayMonth}-${todayDate}`;
+    const todayMonth = today.getMonth(); // 0-based
+    const todayDate = today.getDate();
 
-    console.log("🎂 Running birthday job for:", todayKey);
+    console.log("🎂 Running birthday job for:", `${todayMonth + 1}-${todayDate}`);
 
     const customers = await prisma.premiumCustomer.findMany({
       where: {
-        birthday: { not: null }
+        NOT: {
+          birthday: null
+        }
       }
     });
 
@@ -35,17 +36,15 @@ export async function action({ request }) {
       try {
         if (!customer.birthday) continue;
 
-        // Expect YYYY-MM-DD (string)
-        const parts = customer.birthday.split("-");
-        if (parts.length !== 3) continue;
+        const birthday = new Date(customer.birthday);
 
-        const customerKey = `${parts[1]}-${parts[2]}`;
+        const customerMonth = birthday.getMonth();
+        const customerDate = birthday.getDate();
 
-        // ✅ Match only month + day
-        if (customerKey === todayKey) {
+        // ✅ Match only month + date
+        if (customerMonth === todayMonth && customerDate === todayDate) {
           console.log(`🎉 Rewarding: ${customer.email}`);
 
-          // ➕ Direct update (NO transaction needed)
           await prisma.premiumCustomer.update({
             where: { id: customer.id },
             data: {
