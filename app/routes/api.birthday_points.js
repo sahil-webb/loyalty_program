@@ -17,15 +17,16 @@ export async function action({ request }) {
 
     const today = new Date();
 
-    const todayMonth = today.getMonth(); // 0-based
-    const todayDate = today.getDate();
+    const todayMonth = today.getUTCMonth();
+    const todayDate = today.getUTCDate();
 
     console.log("🎂 Running birthday job for:", `${todayMonth + 1}-${todayDate}`);
 
+    // ✅ FIXED QUERY
     const customers = await prisma.premiumCustomer.findMany({
       where: {
-        NOT: {
-          birthday: null
+        birthday: {
+          not: null
         }
       }
     });
@@ -38,8 +39,8 @@ export async function action({ request }) {
 
         const birthday = new Date(customer.birthday);
 
-        const customerMonth = birthday.getMonth();
-        const customerDate = birthday.getDate();
+        const customerMonth = birthday.getUTCMonth();
+        const customerDate = birthday.getUTCDate();
 
         // ✅ Match only month + date
         if (customerMonth === todayMonth && customerDate === todayDate) {
