@@ -65,7 +65,7 @@ async function addRewardCustomerOrderPoints(data) {
     // ✅ USE LEDGER INSTEAD OF DIRECT UPDATE
         await addCustomerPoints({
           shop: SHOP,
-          shopifyId: customer.shopifyId,
+          shopifyId: updatedCustomer.shopifyId,
           points: earnedPoints,
           type: "EARN",
           description: "Order reward"
