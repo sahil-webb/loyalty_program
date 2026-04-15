@@ -4,22 +4,25 @@ const prisma = new PrismaClient();
 
 /*
 ========================================================
-PREMIUM CUSTOMER ORDER REWARD (2x COINS)
+REWARD CUSTOMER FUNCTION (1₹ = 1 POINT)
 ========================================================
 */
 
-export async function addPremiumCustomerOrderReward(data) {
+async function addRewardCustomerOrderPoints(data) {
   try {
-    let { email, amountSpent } = data;
-
     console.log("📦 Incoming Data:", data);
+
+    let { email, amountSpent } = data;
 
     if (!email || !amountSpent) {
       console.log("❌ Missing email or amountSpent");
       return;
     }
 
-    // ✅ Convert Shopify Flow string → number
+    // ✅ Clean email
+    email = email.trim().toLowerCase();
+
+    // ✅ Convert amount
     amountSpent = parseFloat(amountSpent);
 
     if (isNaN(amountSpent)) {
@@ -27,42 +30,86 @@ export async function addPremiumCustomerOrderReward(data) {
       return;
     }
 
-    // ✅ 2x reward logic (₹30 → 60 coins)
-    const earnedCoins = Math.floor(amountSpent * 2);
+    // ✅ 1₹ = 1 point
+    const earnedPoints = Math.floor(amountSpent);
 
-    console.log("💰 Amount Spent:", amountSpent);
-    console.log("🎁 Coins Earned:", earnedCoins);
+    console.log("💰 Amount:", amountSpent);
+    console.log("🎁 Points:", earnedPoints);
 
-    // ✅ Find Premium Customer
-    const customer = await prisma.premiumCustomer.findFirst({
+    // ✅ Find customer
+    const customer = await prisma.rewardCustomer.findFirst({
       where: {
         email: email
       }
     });
 
     if (!customer) {
-      console.log("❌ Premium customer not found:", email);
+      console.log("❌ Customer not found:", email);
       return;
     }
 
-    // ✅ Update coins
-    const updatedCustomer = await prisma.premiumCustomer.update({
+    console.log("✅ Customer Found:", customer.id);
+
+    // ✅ Update points
+    const updatedCustomer = await prisma.rewardCustomer.update({
       where: {
         id: customer.id
       },
       data: {
-        coins: {
-          increment: earnedCoins
+        points: {
+          increment: earnedPoints
         }
       }
     });
 
-    console.log(`✅ ${earnedCoins} coins added to ${email}`);
-    console.log("💰 Total Coins:", updatedCustomer.coins);
-
-    return updatedCustomer;
+    console.log("✅ Points Updated:", updatedCustomer.points);
 
   } catch (error) {
-    console.error("🔥 Premium reward error:", error);
+    console.error("🔥 Reward function error:", error);
+  }
+}
+
+/*
+========================================================
+API ROUTE (SHOPIFY FLOW CALLS THIS)
+========================================================
+*/
+
+export async function action({ request }) {
+  try {
+    console.log("🚀 API HIT /api/premiumCustomerPoints");
+
+    // ✅ Parse request body
+    const body = await request.json();
+
+    console.log("📦 BODY RECEIVED:", body);
+
+    // ✅ Call function
+    await addRewardCustomerOrderPoints(body);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Points added"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+
+  } catch (error) {
+    console.error("🔥 API ERROR:", error);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
   }
 }
