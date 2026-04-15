@@ -1,9 +1,9 @@
 import { PrismaClient } from "@prisma/client";
-
+import { addCustomerPoints } from "./api.pointsLedger.js";
 const prisma = new PrismaClient();
 
 const API_SECRET = "regular_birthday_points";
-
+const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 export async function action({ request }) {
   try {
     console.log("🚀 API HIT");
@@ -78,6 +78,21 @@ export async function action({ request }) {
               }
             }
           });
+    
+    
+     /* ========================================================
+       ADD POINTS USING LEDGER
+    ======================================================== */
+
+    customer = await addCustomerPoints({
+
+      shop: SHOP,
+      shopifyId: customer.id,
+      points: 100,
+      type: "EARN",
+      description: "Birthday reward"
+
+    });
 
           rewardedCount++;
         } else {
@@ -87,6 +102,8 @@ export async function action({ request }) {
       } catch (err) {
         console.error("❌ Error processing customer:", customer.id, err);
       }
+
+
     }
 
     console.log("\n✅ FINAL RESULT");
