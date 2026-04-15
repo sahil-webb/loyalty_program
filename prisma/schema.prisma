@@ -83,7 +83,7 @@ model PremiumCustomer {
   referralCode       String?  @unique
   signInWithReferral Boolean  @default(false)
   signInReferralCode String?
-  
+  birthday           DateTime @default(dbgenerated("'2002-04-15'"))
   tier               String   @default("insider")
   lastVisitReward    DateTime?
 
