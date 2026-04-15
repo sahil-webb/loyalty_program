@@ -6,9 +6,8 @@ const API_SECRET = "regular_birthday_points";
 
 export async function action({ request }) {
   try {
-  
     const apiKey = request.headers.get("x-api-key");
-    console.log(apiKey);
+
     if (apiKey !== API_SECRET) {
       return new Response(
         JSON.stringify({ success: false, message: "Unauthorized" }),
@@ -24,7 +23,7 @@ export async function action({ request }) {
 
     console.log("🎂 Running birthday job for:", todayKey);
 
-    const customers = await prisma.rewardCustomer.findMany({
+    const customers = await prisma.premiumCustomer.findMany({
       where: {
         birthday: { not: null }
       }
@@ -36,36 +35,24 @@ export async function action({ request }) {
       try {
         if (!customer.birthday) continue;
 
-        // Expect YYYY-MM-DD
+        // Expect YYYY-MM-DD (string)
         const parts = customer.birthday.split("-");
         if (parts.length !== 3) continue;
 
         const customerKey = `${parts[1]}-${parts[2]}`;
 
+        // ✅ Match only month + day
         if (customerKey === todayKey) {
           console.log(`🎉 Rewarding: ${customer.email}`);
 
-          await prisma.$transaction(async (tx) => {
-            // ➕ Add points
-            await tx.rewardCustomer.update({
-              where: { id: customer.id },
-              data: {
-                points: {
-                  increment: 100
-                }
+          // ➕ Direct update (NO transaction needed)
+          await prisma.premiumCustomer.update({
+            where: { id: customer.id },
+            data: {
+              coins: {
+                increment: 100
               }
-            });
-
-            // 🧾 Ledger entry
-            await tx.pointLedger.create({
-              data: {
-                shop: customer.shop,
-                shopifyId: customer.shopifyId,
-                points: 100,
-                type: "birthday",
-                description: "Birthday reward"
-              }
-            });
+            }
           });
 
           rewardedCount++;
