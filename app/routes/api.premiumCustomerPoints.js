@@ -4,53 +4,42 @@ const prisma = new PrismaClient();
 
 /*
 ========================================================
-REWARD CUSTOMER (1₹ = 1 POINT)
+PREMIUM CUSTOMER ORDER REWARD (₹ → 2x COINS)
 ========================================================
 */
-async function handleRewardCustomer(email, amountSpent) {
+
+export async function addPremiumCustomerOrderReward(data) {
   try {
-    const earnedPoints = Math.floor(amountSpent);
+    console.log("🚀 PremiumCustomer Reward Triggered");
 
-    console.log("🎯 [RewardCustomer] Points:", earnedPoints);
+    let { email, amountSpent } = data;
 
-    const customer = await prisma.rewardCustomer.findFirst({
-      where: {
-        email: email
-      }
-    });
+    console.log("📦 Raw Data:", data);
 
-    if (!customer) {
-      console.log("❌ RewardCustomer not found");
+    // ✅ Validate
+    if (!email || !amountSpent) {
+      console.log("❌ Missing email or amountSpent");
       return;
     }
 
-    await prisma.rewardCustomer.update({
-      where: { id: customer.id },
-      data: {
-        points: {
-          increment: earnedPoints
-        }
-      }
-    });
+    // ✅ Clean email
+    email = email.trim().toLowerCase();
+    console.log("📧 Email:", email);
 
-    console.log("✅ RewardCustomer updated:", customer.id);
+    // ✅ Convert amount
+    amountSpent = parseFloat(amountSpent);
+    console.log("💰 Amount Spent:", amountSpent);
 
-  } catch (err) {
-    console.error("🔥 RewardCustomer error:", err);
-  }
-}
+    if (isNaN(amountSpent)) {
+      console.log("❌ Invalid amountSpent");
+      return;
+    }
 
-/*
-========================================================
-PREMIUM CUSTOMER (1₹ = 2 COINS)
-========================================================
-*/
-async function handlePremiumCustomer(email, amountSpent) {
-  try {
+    // ✅ 2x logic
     const earnedCoins = Math.floor(amountSpent * 2);
+    console.log("💎 Coins to Add:", earnedCoins);
 
-    console.log("💎 [PremiumCustomer] Coins:", earnedCoins);
-
+    // ✅ Find Premium Customer
     const customer = await prisma.premiumCustomer.findFirst({
       where: {
         email: email
@@ -58,12 +47,20 @@ async function handlePremiumCustomer(email, amountSpent) {
     });
 
     if (!customer) {
-      console.log("❌ PremiumCustomer not found");
+      console.log("❌ PremiumCustomer NOT FOUND:", email);
       return;
     }
 
-    await prisma.premiumCustomer.update({
-      where: { id: customer.id },
+    console.log("✅ Customer Found:");
+    console.log("🆔 ID:", customer.id);
+    console.log("🏷️ Tier:", customer.tier);
+    console.log("💰 Current Coins:", customer.coins);
+
+    // ✅ Update coins
+    const updatedCustomer = await prisma.premiumCustomer.update({
+      where: {
+        id: customer.id
+      },
       data: {
         coins: {
           increment: earnedCoins
@@ -71,73 +68,13 @@ async function handlePremiumCustomer(email, amountSpent) {
       }
     });
 
-    console.log("✅ PremiumCustomer updated:", customer.id);
+    console.log("✅ Coins Updated Successfully");
+    console.log("🎁 Coins Added:", earnedCoins);
+    console.log("💰 New Total Coins:", updatedCustomer.coins);
 
-  } catch (err) {
-    console.error("🔥 PremiumCustomer error:", err);
-  }
-}
-
-/*
-========================================================
-MAIN API (SHOPIFY FLOW)
-========================================================
-*/
-
-export async function action({ request }) {
-  try {
-    console.log("🚀 API HIT /api/premiumCustomerPoints");
-
-    const body = await request.json();
-
-    console.log("📦 BODY:", body);
-
-    let { email, amountSpent } = body;
-
-    if (!email || !amountSpent) {
-      console.log("❌ Missing data");
-      return new Response("Invalid data", { status: 400 });
-    }
-
-    // ✅ Clean + parse
-    email = email.trim().toLowerCase();
-    amountSpent = parseFloat(amountSpent);
-
-    if (isNaN(amountSpent)) {
-      console.log("❌ Invalid amount");
-      return new Response("Invalid amount", { status: 400 });
-    }
-
-    console.log("📧 Email:", email);
-    console.log("💰 Amount:", amountSpent);
-
-    // ✅ Run both logics
-    await handleRewardCustomer(email, amountSpent);
-    await handlePremiumCustomer(email, amountSpent);
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Points processed for both customers"
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+    return updatedCustomer;
 
   } catch (error) {
-    console.error("🔥 GLOBAL ERROR:", error);
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
+    console.error("🔥 PremiumCustomer Reward Error:", error);
   }
 }
