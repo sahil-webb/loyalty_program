@@ -6,9 +6,13 @@ const API_SECRET = "regular_birthday_points";
 
 export async function action({ request }) {
   try {
+    console.log("🚀 API HIT");
+
     const apiKey = request.headers.get("x-api-key");
+    console.log("🔑 API KEY:", apiKey);
 
     if (apiKey !== API_SECRET) {
+      console.log("❌ Unauthorized");
       return new Response(
         JSON.stringify({ success: false, message: "Unauthorized" }),
         { status: 401 }
@@ -20,31 +24,51 @@ export async function action({ request }) {
     const todayMonth = today.getUTCMonth();
     const todayDate = today.getUTCDate();
 
-    console.log("🎂 Running birthday job for:", `${todayMonth + 1}-${todayDate}`);
+    console.log("📅 Today Month:", todayMonth + 1);
+    console.log("📅 Today Date:", todayDate);
 
-    // ✅ FIXED QUERY
-    const customers = await prisma.premiumCustomer.findMany({
-      where: {
-        birthday: {
-          not: null
-        }
-      }
-    });
+    // ✅ NO FILTER (important fix)
+    const customers = await prisma.premiumCustomer.findMany();
+
+    console.log("👥 Total customers fetched:", customers.length);
 
     let rewardedCount = 0;
 
     for (const customer of customers) {
       try {
-        if (!customer.birthday) continue;
+        console.log("\n------------------------");
+        console.log("👤 Processing customer ID:", customer.id);
+        console.log("📧 Email:", customer.email);
+        console.log("🎂 Raw Birthday:", customer.birthday);
 
-        const birthday = new Date(customer.birthday);
+        if (!customer.birthday) {
+          console.log("⚠️ No birthday, skipping");
+          continue;
+        }
+
+        let birthday;
+
+        try {
+          birthday = new Date(customer.birthday);
+        } catch (e) {
+          console.log("❌ Invalid date format:", customer.birthday);
+          continue;
+        }
+
+        if (isNaN(birthday)) {
+          console.log("❌ Parsed invalid date:", customer.birthday);
+          continue;
+        }
 
         const customerMonth = birthday.getUTCMonth();
         const customerDate = birthday.getUTCDate();
 
-        // ✅ Match only month + date
+        console.log("📆 Customer Month:", customerMonth + 1);
+        console.log("📆 Customer Date:", customerDate);
+
+        // ✅ Match
         if (customerMonth === todayMonth && customerDate === todayDate) {
-          console.log(`🎉 Rewarding: ${customer.email}`);
+          console.log("🎉 MATCH FOUND → Rewarding");
 
           await prisma.premiumCustomer.update({
             where: { id: customer.id },
@@ -56,13 +80,17 @@ export async function action({ request }) {
           });
 
           rewardedCount++;
+        } else {
+          console.log("❌ Not matching today");
         }
+
       } catch (err) {
         console.error("❌ Error processing customer:", customer.id, err);
       }
     }
 
-    console.log(`✅ Done. Rewarded: ${rewardedCount}`);
+    console.log("\n✅ FINAL RESULT");
+    console.log("🎁 Total Rewarded:", rewardedCount);
 
     return new Response(
       JSON.stringify({
@@ -73,7 +101,7 @@ export async function action({ request }) {
     );
 
   } catch (error) {
-    console.error("🔥 Error:", error);
+    console.error("🔥 GLOBAL ERROR:", error);
 
     return new Response(
       JSON.stringify({
