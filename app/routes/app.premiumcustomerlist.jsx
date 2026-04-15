@@ -22,6 +22,7 @@ export default function PremiumCustomersPage() {
 
       const formatted = data.map((c) => [
         c.id,
+        c.birthday,
         c.shopifyId,
         <Link url={`/app/premiumcustomer/${c.shopifyId}${params}`} removeUnderline>
           {c.email}
@@ -49,12 +50,14 @@ export default function PremiumCustomersPage() {
             "numeric",
             "text",
             "text",
+            "text",
             "numeric",
             "text",
             "text"
           ]}
           headings={[
             "ID",
+            "Birthday",
             "Shopify Customer ID",
             "Email",
             "Coins",

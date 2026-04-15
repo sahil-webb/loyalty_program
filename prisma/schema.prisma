@@ -76,17 +76,14 @@ model PremiumCustomer {
   shop               String
   shopifyId          String
   email              String?
-
   coins              Int      @default(0)
   discountCode       String?
-
   referralCode       String?  @unique
   signInWithReferral Boolean  @default(false)
   signInReferralCode String?
-
+  birthday           DateTime @default(dbgenerated("'2002-04-15'"))
   tier               String   @default("insider")
   lastVisitReward    DateTime?
-
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
