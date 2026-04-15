@@ -4,42 +4,15 @@ const prisma = new PrismaClient();
 
 /*
 ========================================================
-PREMIUM CUSTOMER ORDER REWARD (₹ → 2x COINS)
+PREMIUM CUSTOMER (1₹ = 2 COINS)
 ========================================================
 */
-
-export async function addPremiumCustomerOrderReward(data) {
+async function handlePremiumCustomer(email, amountSpent) {
   try {
-    console.log("🚀 PremiumCustomer Reward Triggered");
-
-    let { email, amountSpent } = data;
-
-    console.log("📦 Raw Data:", data);
-
-    // ✅ Validate
-    if (!email || !amountSpent) {
-      console.log("❌ Missing email or amountSpent");
-      return;
-    }
-
-    // ✅ Clean email
-    email = email.trim().toLowerCase();
-    console.log("📧 Email:", email);
-
-    // ✅ Convert amount
-    amountSpent = parseFloat(amountSpent);
-    console.log("💰 Amount Spent:", amountSpent);
-
-    if (isNaN(amountSpent)) {
-      console.log("❌ Invalid amountSpent");
-      return;
-    }
-
-    // ✅ 2x logic
     const earnedCoins = Math.floor(amountSpent * 2);
-    console.log("💎 Coins to Add:", earnedCoins);
 
-    // ✅ Find Premium Customer
+    console.log("💎 [PremiumCustomer] Coins:", earnedCoins);
+
     const customer = await prisma.premiumCustomer.findFirst({
       where: {
         email: email
@@ -47,20 +20,12 @@ export async function addPremiumCustomerOrderReward(data) {
     });
 
     if (!customer) {
-      console.log("❌ PremiumCustomer NOT FOUND:", email);
+      console.log("❌ PremiumCustomer not found");
       return;
     }
 
-    console.log("✅ Customer Found:");
-    console.log("🆔 ID:", customer.id);
-    console.log("🏷️ Tier:", customer.tier);
-    console.log("💰 Current Coins:", customer.coins);
-
-    // ✅ Update coins
-    const updatedCustomer = await prisma.premiumCustomer.update({
-      where: {
-        id: customer.id
-      },
+    await prisma.premiumCustomer.update({
+      where: { id: customer.id },
       data: {
         coins: {
           increment: earnedCoins
@@ -68,13 +33,72 @@ export async function addPremiumCustomerOrderReward(data) {
       }
     });
 
-    console.log("✅ Coins Updated Successfully");
-    console.log("🎁 Coins Added:", earnedCoins);
-    console.log("💰 New Total Coins:", updatedCustomer.coins);
+    console.log("✅ PremiumCustomer updated:", customer.id);
 
-    return updatedCustomer;
+  } catch (err) {
+    console.error("🔥 PremiumCustomer error:", err);
+  }
+}
+
+/*
+========================================================
+MAIN API (SHOPIFY FLOW)
+========================================================
+*/
+
+export async function action({ request }) {
+  try {
+    console.log("🚀 API HIT /api/premiumCustomerPoints");
+
+    const body = await request.json();
+
+    console.log("📦 BODY:", body);
+
+    let { email, amountSpent } = body;
+
+    if (!email || !amountSpent) {
+      console.log("❌ Missing data");
+      return new Response("Invalid data", { status: 400 });
+    }
+
+    // ✅ Clean + parse
+    email = email.trim().toLowerCase();
+    amountSpent = parseFloat(amountSpent);
+
+    if (isNaN(amountSpent)) {
+      console.log("❌ Invalid amount");
+      return new Response("Invalid amount", { status: 400 });
+    }
+
+    console.log("📧 Email:", email);
+    console.log("💰 Amount:", amountSpent);
+
+    // ✅ Run Premium logic only
+    await handlePremiumCustomer(email, amountSpent);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: "Coins processed for PremiumCustomer"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
 
   } catch (error) {
-    console.error("🔥 PremiumCustomer Reward Error:", error);
+    console.error("🔥 GLOBAL ERROR:", error);
+
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
   }
 }
