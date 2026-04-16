@@ -38,7 +38,7 @@ console.log("📦 Raw Data:", orderId);
     }
 
     console.log("📧 Email:", email);
-    console.log("💸 Discount Amount:", discountAmount);
+    console.log("💸 Discount Amount::", discountAmount);
 
     // ✅ Convert Shopify GID → ID
     const shopifyCustomerId = customerId?.split("/").pop();
