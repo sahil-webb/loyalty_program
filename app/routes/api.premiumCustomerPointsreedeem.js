@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-
+import { addCustomerPoints } from "./api.pointsLedger.js";
 const prisma = new PrismaClient();
 
 const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
@@ -69,41 +69,51 @@ console.log("📦 Raw Data:", orderId);
       return;
     }
 
-    // ✅ Transaction (safe)
-    await prisma.$transaction(async (tx) => {
-
-      const updatedCustomer = await tx.premiumCustomer.update({
-        where: {
-          shop_shopifyId: {
+ await addCustomerPoints({
             shop: SHOP,
-            shopifyId: shopifyCustomerId
-          }
-        },
-        data: {
-          coins: {
-            decrement: redeemCoins
-          }
-        }
-      });
+            shopifyId: customerId, // ✅ FIXED
+            points: -redeemCoins,
+            type: "REDEEM",
+            description: "Order Redeem"
+          });
 
-      console.log("💸 Coins Deducted:", redeemCoins);
 
-      // ✅ Ledger entry
-      await tx.rewardTransaction.create({
-        data: {
-          shop: SHOP,
-          shopifyId: shopifyCustomerId,
-          type: "REDEEM",
-          points: -redeemCoins,
-          availablePoints: updatedCustomer.coins,
-          description: `Redeemed via ${discountCode}`,
-          orderId: orderId,
-          tier: updatedCustomer.tier
-        }
-      });
 
-      console.log("🧾 Redeem Ledger Created");
-    });
+    // // ✅ Transaction (safe)
+    // await prisma.$transaction(async (tx) => {
+
+    //   const updatedCustomer = await tx.premiumCustomer.update({
+    //     where: {
+    //       shop_shopifyId: {
+    //         shop: SHOP,
+    //         shopifyId: shopifyCustomerId
+    //       }
+    //     },
+    //     data: {
+    //       coins: {
+    //         decrement: redeemCoins
+    //       }
+    //     }
+    //   });
+
+    //   console.log("💸 Coins Deducted:", redeemCoins);
+
+    //   // ✅ Ledger entry
+    //   await tx.rewardTransaction.create({
+    //     data: {
+    //       shop: SHOP,
+    //       shopifyId: shopifyCustomerId,
+    //       type: "REDEEM",
+    //       points: -redeemCoins,
+    //       availablePoints: updatedCustomer.coins,
+    //       description: `Redeemed via ${discountCode}`,
+    //       orderId: orderId,
+    //       tier: updatedCustomer.tier
+    //     }
+    //   });
+
+    //   console.log("🧾 Redeem Ledger Created");
+    // });
 
   } catch (error) {
     console.error("🔥 Redeem Error:", error);
