@@ -69,51 +69,42 @@ console.log("📦 Raw Data:", orderId);
       return;
     }
 
- await addCustomerPoints({
+    
+    // ✅ Transaction (safe)
+    await prisma.$transaction(async (tx) => {
+
+      const updatedCustomer = await tx.premiumCustomer.update({
+        where: {
+          shop_shopifyId: {
             shop: SHOP,
-            shopifyId: customerId, // ✅ FIXED
-            points: -redeemCoins,
-            type: "REDEEM",
-            description: "Order Redeem"
-          });
+            shopifyId: shopifyCustomerId
+          }
+        },
+        data: {
+          coins: {
+            decrement: redeemCoins
+          }
+        }
+      });
 
+      console.log("💸 Coins Deducted:", redeemCoins);
 
+      // ✅ Ledger entry
+      await tx.rewardTransaction.create({
+        data: {
+          shop: SHOP,
+          shopifyId: shopifyCustomerId,
+          type: "REDEEM",
+          points: -redeemCoins,
+          availablePoints: updatedCustomer.coins,
+          description: `Redeemed via ${discountCode}`,
+          orderId: orderId,
+          tier: updatedCustomer.tier
+        }
+      });
 
-    // // ✅ Transaction (safe)
-    // await prisma.$transaction(async (tx) => {
-
-    //   const updatedCustomer = await tx.premiumCustomer.update({
-    //     where: {
-    //       shop_shopifyId: {
-    //         shop: SHOP,
-    //         shopifyId: shopifyCustomerId
-    //       }
-    //     },
-    //     data: {
-    //       coins: {
-    //         decrement: redeemCoins
-    //       }
-    //     }
-    //   });
-
-    //   console.log("💸 Coins Deducted:", redeemCoins);
-
-    //   // ✅ Ledger entry
-    //   await tx.rewardTransaction.create({
-    //     data: {
-    //       shop: SHOP,
-    //       shopifyId: shopifyCustomerId,
-    //       type: "REDEEM",
-    //       points: -redeemCoins,
-    //       availablePoints: updatedCustomer.coins,
-    //       description: `Redeemed via ${discountCode}`,
-    //       orderId: orderId,
-    //       tier: updatedCustomer.tier
-    //     }
-    //   });
-
-    //   console.log("🧾 Redeem Ledger Created");
-    // });
+      console.log("🧾 Redeem Ledger Created");
+    });
 
   } catch (error) {
     console.error("🔥 Redeem Error:", error);
