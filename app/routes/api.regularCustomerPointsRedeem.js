@@ -1,25 +1,20 @@
 import { PrismaClient } from "@prisma/client";
-import { addCustomerPoints } from "./api.pointsLedger.js";
+
 const prisma = new PrismaClient();
 
 const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 
 /*
 ========================================================
-REDEEM PREMIUM CUSTOMER POINTS
+REDEEM REWARD CUSTOMER POINTS
 ========================================================
 */
 
-async function handleRedeem(data) {
+async function handleRewardRedeem(data) {
   try {
-    console.log("🚀 Redeem Triggered");
+    console.log("🚀 RewardCustomer Redeem Triggered");
 
     let { email, customerId, discountCode, discountAmount, orderId } = data;
-console.log("📦 Raw Data:", email);
-console.log("📦 Raw Data:", customerId);
-console.log("📦 Raw Data:", discountCode);
-console.log("📦 Raw Data:", discountAmount);
-console.log("📦 Raw Data:", orderId);
 
     console.log("📦 Raw Data:", data);
 
@@ -38,15 +33,15 @@ console.log("📦 Raw Data:", orderId);
     }
 
     console.log("📧 Email:", email);
-    console.log("💸 Discount Amount::", discountAmount);
+    console.log("💸 Discount Amount:", discountAmount);
 
-    // ✅ Convert Shopify GID → ID
+    // ✅ Shopify GID → ID
     const shopifyCustomerId = customerId?.split("/").pop();
 
     console.log("🆔 Shopify ID:", shopifyCustomerId);
 
-    // ✅ Find Premium Customer
-    const customer = await prisma.RewardCustomer.findFirst({
+    // ✅ Find RewardCustomer
+    const customer = await prisma.rewardCustomer.findFirst({
       where: {
         shop: SHOP,
         shopifyId: shopifyCustomerId
@@ -54,26 +49,25 @@ console.log("📦 Raw Data:", orderId);
     });
 
     if (!customer) {
-      console.log("❌ PremiumCustomer not found");
+      console.log("❌ RewardCustomer not found");
       return;
     }
 
     console.log("✅ Customer Found:", customer.id);
-    console.log("💰 Current Coins:", customer.coins);
+    console.log("💰 Current Points:", customer.points);
 
-    // ✅ Deduct coins (1₹ = 1 coin redeem logic)
-    const redeemCoins = Math.floor(discountAmount);
+    // ✅ Redeem logic (1₹ = 1 point)
+    const redeemPoints = Math.floor(discountAmount);
 
-    if (customer.coins < redeemCoins) {
-      console.log("❌ Not enough coins");
+    if (customer.points < redeemPoints) {
+      console.log("❌ Not enough points");
       return;
     }
 
-    
     // ✅ Transaction (safe)
     await prisma.$transaction(async (tx) => {
 
-      const updatedCustomer = await tx.RewardCustomer.update({
+      const updatedCustomer = await tx.rewardCustomer.update({
         where: {
           shop_shopifyId: {
             shop: SHOP,
@@ -82,12 +76,12 @@ console.log("📦 Raw Data:", orderId);
         },
         data: {
           points: {
-            decrement: redeemCoins
+            decrement: redeemPoints
           }
         }
       });
 
-      console.log("💸 Coins Deducted:", redeemCoins);
+      console.log("💸 Points Deducted:", redeemPoints);
 
       // ✅ Ledger entry
       await tx.rewardTransaction.create({
@@ -95,19 +89,19 @@ console.log("📦 Raw Data:", orderId);
           shop: SHOP,
           shopifyId: shopifyCustomerId,
           type: "REDEEM",
-          points: -redeemCoins,
-          availablePoints: updatedCustomer.coins,
+          points: -redeemPoints,
+          availablePoints: updatedCustomer.points,
           description: `Redeemed via ${discountCode}`,
           orderId: orderId,
           tier: updatedCustomer.tier
         }
       });
 
-      console.log("🧾 Redeem Ledger Created");
+      console.log("🧾 RewardCustomer Ledger Created");
     });
 
   } catch (error) {
-    console.error("🔥 Redeem Error:", error);
+    console.error("🔥 RewardCustomer Redeem Error:", error);
   }
 }
 
@@ -119,11 +113,11 @@ API ROUTE
 
 export async function action({ request }) {
   try {
-    console.log("🚀 API HIT /api/redeemPoints");
+    console.log("🚀 API HIT /api/redeemRewardCustomer");
 
     const body = await request.json();
 
-    await handleRedeem(body);
+    await handleRewardRedeem(body);
 
     return new Response(
       JSON.stringify({ success: true }),
