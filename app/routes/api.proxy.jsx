@@ -232,7 +232,7 @@ export async function action({ request }) {
        CREATE DISCOUNT
     ------------------------- */
 
-    await shopifyGraphQL(
+    await admin.graphql(
 
       `mutation discountCreate($input: DiscountCodeBasicInput!) {
         discountCodeBasicCreate(basicCodeDiscount: $input) {
