@@ -116,7 +116,7 @@ export async function action({ request }) {
         message: "Customer creation failed"
       }));
     }
-
+    const shopifyCustomerIdreal = customerData.customer.admin_graphql_api_id;
     const shopifyCustomerId = customerData.customer.admin_graphql_api_id.split("/").pop();
 
     console.log("✅ Shopify Customer Created:", shopifyCustomerId);
@@ -233,89 +233,38 @@ export async function action({ request }) {
     ------------------------- */
 
     await admin.graphql(
-
-      `mutation discountCreate($input: DiscountCodeBasicInput!) {
+      `
+      mutation ($input: DiscountCodeBasicInput!) {
         discountCodeBasicCreate(basicCodeDiscount: $input) {
           userErrors {
             field
             message
           }
         }
-      }`,
-
+      }
+      `,
       {
         input: {
-
           title: discountCode,
           code: discountCode,
           startsAt: new Date().toISOString(),
-
           customerSelection: {
             customers: {
-              add: [shopifyCustomerId]
+              add: [shopifyCustomerIdreal]
             }
           },
-
           customerGets: {
-
             items: { all: true },
-
             value: {
-             discountAmount: {
+              discountAmount: {
                 amount: String(discountAmount),
                 appliesOnEachItem: false
               }
             }
-
-          },
-
-          usageLimit: 1000,
-
-          combinesWith: {
-            shippingDiscounts: false,
-            orderDiscounts: false,
-            productDiscounts: false
           }
-
         }
       }
-
     );
-
-
-    // await admin.graphql(
-    //   `
-    //   mutation ($input: DiscountCodeBasicInput!) {
-    //     discountCodeBasicCreate(basicCodeDiscount: $input) {
-    //       userErrors {
-    //         field
-    //         message
-    //       }
-    //     }
-    //   }
-    //   `,
-    //   {
-    //     input: {
-    //       title: discountCode,
-    //       code: discountCode,
-    //       startsAt: new Date().toISOString(),
-    //       customerSelection: {
-    //         customers: {
-    //           add: [shopifyCustomerId]
-    //         }
-    //       },
-    //       customerGets: {
-    //         items: { all: true },
-    //         value: {
-    //           discountAmount: {
-    //             amount: String(discountAmount),
-    //             appliesOnEachItem: false
-    //           }
-    //         }
-    //       }
-    //     }
-    //   }
-    // );
 
     /* -------------------------
        FINAL RESPONSE
