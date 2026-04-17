@@ -232,39 +232,90 @@ export async function action({ request }) {
        CREATE DISCOUNT
     ------------------------- */
 
-    await admin.graphql(
-      `
-      mutation ($input: DiscountCodeBasicInput!) {
+    await shopifyGraphQL(
+
+      `mutation discountCreate($input: DiscountCodeBasicInput!) {
         discountCodeBasicCreate(basicCodeDiscount: $input) {
           userErrors {
             field
             message
           }
         }
-      }
-      `,
+      }`,
+
       {
         input: {
+
           title: discountCode,
           code: discountCode,
           startsAt: new Date().toISOString(),
+
           customerSelection: {
             customers: {
               add: [shopifyCustomerId]
             }
           },
+
           customerGets: {
+
             items: { all: true },
+
             value: {
-              discountAmount: {
+             discountAmount: {
                 amount: String(discountAmount),
                 appliesOnEachItem: false
               }
             }
+
+          },
+
+          usageLimit: 1000,
+
+          combinesWith: {
+            shippingDiscounts: false,
+            orderDiscounts: false,
+            productDiscounts: false
           }
+
         }
       }
+
     );
+
+
+    // await admin.graphql(
+    //   `
+    //   mutation ($input: DiscountCodeBasicInput!) {
+    //     discountCodeBasicCreate(basicCodeDiscount: $input) {
+    //       userErrors {
+    //         field
+    //         message
+    //       }
+    //     }
+    //   }
+    //   `,
+    //   {
+    //     input: {
+    //       title: discountCode,
+    //       code: discountCode,
+    //       startsAt: new Date().toISOString(),
+    //       customerSelection: {
+    //         customers: {
+    //           add: [shopifyCustomerId]
+    //         }
+    //       },
+    //       customerGets: {
+    //         items: { all: true },
+    //         value: {
+    //           discountAmount: {
+    //             amount: String(discountAmount),
+    //             appliesOnEachItem: false
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+    // );
 
     /* -------------------------
        FINAL RESPONSE
