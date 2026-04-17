@@ -6,24 +6,24 @@ const SHOP = process.env.SHOPIFY_SHOP_DOMAIN;
 
 /*
 ========================================================
-REDEEM REWARD CUSTOMER POINTS
+REDEEM USING CLOSEST POINT RULE
 ========================================================
 */
 
 async function handleRewardRedeem(data) {
   try {
-    console.log("🚀 RewardCustomer Redeem Triggered");
+    console.log("🚀 Redeem Triggered (Closest Rule)");
 
     let { email, customerId, discountCode, discountAmount, orderId } = data;
 
     console.log("📦 Raw Data:", data);
 
-    if (!email || !discountAmount) {
+    if (!email || !discountAmount || !customerId) {
       console.log("❌ Missing required fields");
       return;
     }
 
-    // ✅ Clean
+    // ✅ Clean inputs
     email = email.trim().toLowerCase();
     discountAmount = parseFloat(discountAmount);
 
@@ -33,14 +33,19 @@ async function handleRewardRedeem(data) {
     }
 
     console.log("📧 Email:", email);
-    console.log("💸 Discount Amount:", discountAmount);
+    console.log("💸 Discount Used:", discountAmount);
 
-    // ✅ Shopify GID → ID
+    // ✅ Convert Shopify GID → ID
     const shopifyCustomerId = customerId?.split("/").pop();
 
     console.log("🆔 Shopify ID:", shopifyCustomerId);
 
-    // ✅ Find RewardCustomer
+    /*
+    ========================================================
+    FIND CUSTOMER
+    ========================================================
+    */
+
     const customer = await prisma.rewardCustomer.findFirst({
       where: {
         shop: SHOP,
@@ -56,15 +61,63 @@ async function handleRewardRedeem(data) {
     console.log("✅ Customer Found:", customer.id);
     console.log("💰 Current Points:", customer.points);
 
-    // ✅ Redeem logic (1₹ = 1 point)
-    const redeemPoints = Math.floor(discountAmount);
+    /*
+    ========================================================
+    GET ALL RULES
+    ========================================================
+    */
 
-    if (customer.points < redeemPoints) {
+    const rules = await prisma.regularPointRule.findMany();
+
+    if (!rules.length) {
+      console.log("❌ No rules found");
+      return;
+    }
+
+    /*
+    ========================================================
+    FIND CLOSEST RULE
+    ========================================================
+    */
+
+    let closestRule = null;
+    let minDiff = Infinity;
+
+    for (const rule of rules) {
+      const diff = Math.abs(rule.discount - discountAmount);
+
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestRule = rule;
+      }
+    }
+
+    if (!closestRule) {
+      console.log("❌ No closest rule found");
+      return;
+    }
+
+    console.log("🎯 Closest Rule Selected:");
+    console.log("Points:", closestRule.points);
+    console.log("Discount:", closestRule.discount);
+
+    /*
+    ========================================================
+    SAFETY CHECK
+    ========================================================
+    */
+
+    if (customer.points < closestRule.points) {
       console.log("❌ Not enough points");
       return;
     }
 
-    // ✅ Transaction (safe)
+    /*
+    ========================================================
+    TRANSACTION (DEDUCT + LEDGER)
+    ========================================================
+    */
+
     await prisma.$transaction(async (tx) => {
 
       const updatedCustomer = await tx.rewardCustomer.update({
@@ -76,32 +129,31 @@ async function handleRewardRedeem(data) {
         },
         data: {
           points: {
-            decrement: redeemPoints
+            decrement: closestRule.points
           }
         }
       });
 
-      console.log("💸 Points Deducted:", redeemPoints);
+      console.log("💸 Points Deducted:", closestRule.points);
 
-      // ✅ Ledger entry
       await tx.rewardTransaction.create({
         data: {
           shop: SHOP,
           shopifyId: shopifyCustomerId,
           type: "REDEEM",
-          points: -redeemPoints,
+          points: -closestRule.points,
           availablePoints: updatedCustomer.points,
-          description: `Redeemed via ${discountCode}`,
+          description: `Redeemed ₹${discountAmount} (closest rule ₹${closestRule.discount})`,
           orderId: orderId,
           tier: updatedCustomer.tier
         }
       });
 
-      console.log("🧾 RewardCustomer Ledger Created");
+      console.log("🧾 Ledger Entry Created");
     });
 
   } catch (error) {
-    console.error("🔥 RewardCustomer Redeem Error:", error);
+    console.error("🔥 Redeem Error:", error);
   }
 }
 
@@ -120,7 +172,10 @@ export async function action({ request }) {
     await handleRewardRedeem(body);
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({
+        success: true,
+        message: "Redeem processed using closest rule"
+      }),
       {
         status: 200,
         headers: { "Content-Type": "application/json" }
@@ -131,7 +186,10 @@ export async function action({ request }) {
     console.error("🔥 GLOBAL ERROR:", error);
 
     return new Response(
-      JSON.stringify({ success: false }),
+      JSON.stringify({
+        success: false,
+        error: error.message
+      }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" }
