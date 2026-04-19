@@ -12,10 +12,7 @@ export async function action({ request }) {
     const shop = url.searchParams.get("shop");
 
     if (!shop) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: "Shop missing"
-      }));
+      return response(false, "Shop missing");
     }
 
     console.log("👉 ACTION:", actionType);
@@ -34,20 +31,26 @@ export async function action({ request }) {
         return await trackVisit(body, shop);
 
       default:
-        return new Response(JSON.stringify({
-          success: false,
-          message: "Invalid action"
-        }));
+        return response(false, "Invalid action");
     }
 
   } catch (error) {
     console.error("❌ Proxy Error:", error);
-
-    return new Response(JSON.stringify({
-      success: false,
-      message: "Server error"
-    }), { status: 500 });
+    return response(false, "Server error", 500);
   }
+}
+
+/* ========================================================
+   COMMON RESPONSE
+======================================================== */
+function response(success, message, status = 200, extra = {}) {
+  return new Response(
+    JSON.stringify({ success, message, ...extra }),
+    {
+      status,
+      headers: { "Content-Type": "application/json" }
+    }
+  );
 }
 
 /* ========================================================
@@ -56,7 +59,7 @@ export async function action({ request }) {
 async function handleSignup(body, shop) {
   const { first_name, last_name, email, birthday, password, referral } = body;
 
-  /* -------- FIXED BOOLEAN -------- */
+  /* ✅ FIX BOOLEAN */
   const signInWithReferral = !!(referral && referral.trim() !== "");
   const signInReferralCode = signInWithReferral ? referral : null;
 
@@ -75,15 +78,12 @@ async function handleSignup(body, shop) {
   });
 
   if (!session) {
-    return new Response(JSON.stringify({
-      success: false,
-      message: "Session not found"
-    }));
+    return response(false, "Session not found");
   }
 
   const accessToken = session.accessToken;
 
-  /* -------- CREATE CUSTOMER -------- */
+  /* -------- CREATE SHOPIFY CUSTOMER -------- */
   const customerRes = await fetch(
     `https://${shop}/admin/api/2024-01/customers.json`,
     {
@@ -109,18 +109,15 @@ async function handleSignup(body, shop) {
   const customerData = await customerRes.json();
 
   if (!customerData.customer) {
-    return new Response(JSON.stringify({
-      success: false,
-      message: "Customer creation failed"
-    }));
+    return response(false, "Customer creation failed");
   }
 
-  const shopifyCustomerIdreal = customerData.customer.admin_graphql_api_id;
-  const shopifyCustomerId = shopifyCustomerIdreal.split("/").pop();
+  const shopifyCustomerIdReal = customerData.customer.admin_graphql_api_id;
+  const shopifyCustomerId = shopifyCustomerIdReal.split("/").pop();
 
   console.log("✅ Customer Created:", shopifyCustomerId);
 
-  /* -------- SAME DISCOUNT LOGIC -------- */
+  /* -------- YOUR ORIGINAL DISCOUNT LOGIC -------- */
   const discountCode = "PTS-" + email.split("@")[0].toUpperCase();
 
   /* -------- STORE IN DB -------- */
@@ -135,11 +132,13 @@ async function handleSignup(body, shop) {
       points: 500,
       discountCode,
       referralCode,
-      signInWithReferral, // ✅ FIXED
+      signInWithReferral,
       signInReferralCode,
-      lastVisit: new Date()
+      lastVisitReward: new Date() // ✅ FIXED FIELD
     }
   });
+
+  console.log("📦 Customer Stored");
 
   /* -------- SIGNUP BONUS -------- */
   await addCustomerPoints_regular({
@@ -172,10 +171,14 @@ async function handleSignup(body, shop) {
         description: "Referral signup reward",
         referralCode: signInReferralCode
       });
+
+      console.log("🎉 Referrer rewarded");
+    } else {
+      console.log("⚠️ Referral not found");
     }
   }
 
-  /* -------- RULE -------- */
+  /* -------- GET RULE -------- */
   const rule = await prisma.regularPointRule.findFirst({
     where: {
       points: { lte: 500 }
@@ -208,7 +211,7 @@ async function handleSignup(body, shop) {
           code: discountCode,
           startsAt: new Date().toISOString(),
           customerSelection: {
-            customers: { add: [shopifyCustomerIdreal] }
+            customers: { add: [shopifyCustomerIdReal] }
           },
           customerGets: {
             items: { all: true },
@@ -236,9 +239,8 @@ async function handleSignup(body, shop) {
 }
 
 /* ========================================================
-   OTHER ACTIONS
+   GET CUSTOMER
 ======================================================== */
-
 async function getCustomer(body, shop) {
   const { email } = body;
 
@@ -252,6 +254,9 @@ async function getCustomer(body, shop) {
   }));
 }
 
+/* ========================================================
+   UPDATE DISCOUNT
+======================================================== */
 async function updateDiscount(body, shop) {
   const { email } = body;
 
@@ -259,7 +264,7 @@ async function updateDiscount(body, shop) {
     where: { email, shop }
   });
 
-  if (!customer) return new Response(JSON.stringify({ success: false }));
+  if (!customer) return response(false, "Customer not found");
 
   const rule = await prisma.regularPointRule.findFirst({
     where: { points: { lte: customer.points } },
@@ -268,19 +273,21 @@ async function updateDiscount(body, shop) {
 
   const discountAmount = rule?.discount || 0;
 
-  return new Response(JSON.stringify({
-    success: true,
-    discountAmount
-  }));
+  return response(true, "Discount updated", 200, { discountAmount });
 }
 
+/* ========================================================
+   TRACK VISIT
+======================================================== */
 async function trackVisit(body, shop) {
   const { email } = body;
 
   await prisma.rewardCustomer.updateMany({
     where: { email, shop },
-    data: { lastVisit: new Date() }
+    data: {
+      lastVisitReward: new Date() // ✅ FIXED
+    }
   });
 
-  return new Response(JSON.stringify({ success: true }));
+  return response(true, "Visit tracked");
 }
