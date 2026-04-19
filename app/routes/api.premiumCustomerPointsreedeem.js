@@ -67,7 +67,7 @@ async function handlePremiumRedeem(data) {
     ========================================================
     */
 
-    const rules = await prisma.regularPointRule.findMany();
+    const rules = await prisma.PremiumPointRule.findMany();
 
     if (!rules.length) {
       console.log("❌ No rules found");
