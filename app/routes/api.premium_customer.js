@@ -114,7 +114,7 @@ export const action = async ({ request }) => {
           email: email ?? null,
 
           coins: 0,
-          tier: "insider",
+          tier: "VIP",
 
           referralCode: referralCode,
           signInWithReferral: false,

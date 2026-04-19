@@ -74,7 +74,7 @@ export async function loader({ request, params }) {
 
       /* Loyalty data */
       coins: RewardCustomer?.points || 0,
-      tier: RewardCustomer?.tier || "insider",
+      tier: RewardCustomer?.tier || "Regular",
       referralCode: RewardCustomer?.referralCode,
       signInWithReferral: RewardCustomer?.signInWithReferral,
       signInReferralCode: RewardCustomer?.signInReferralCode,

@@ -10,7 +10,7 @@ generator client {
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
-  url      = "file:data/dev.db"
+  url      = "file:dev.db"
 }
 
 model Session {
@@ -51,8 +51,8 @@ model RewardCustomer {
   referralCode String?
   signInWithReferral Boolean @default(false)
   signInReferralCode String?
-
-  tier String @default("insider")
+  lastVisitReward    DateTime?
+  tier String @default("Regular")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,7 +84,7 @@ model PremiumCustomer {
   signInWithReferral Boolean  @default(false)
   signInReferralCode String?
   birthday DateTime @default("2002-04-15T00:00:00.000Z")
-  tier               String   @default("insider")
+  tier               String   @default("VIP")
   lastVisitReward    DateTime?
 
   createdAt          DateTime @default(now())
