@@ -4,13 +4,22 @@ import {
   Card,
   Layout,
   Text,
-  DataTable
+  DataTable,
+  TextField,
+  Select,
+  Button
 } from "@shopify/polaris";
 
 export default function RewardCustomerDetail() {
 
   const [customer, setCustomer] = useState(null);
   const [transactions, setTransactions] = useState([]);
+
+  // ✅ NEW STATE (ADDED)
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustType, setAdjustType] = useState("ADD");
+  const [adjustDesc, setAdjustDesc] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
 
@@ -29,6 +38,37 @@ export default function RewardCustomerDetail() {
     loadCustomer();
 
   }, []);
+
+  // ✅ NEW FUNCTION (ADDED)
+  async function handleAdjust() {
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/adjustRewardCustomer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          shopifyId: customer.shopifyId,
+          amount: parseInt(adjustAmount),
+          type: adjustType,
+          description: adjustDesc
+        })
+      });
+
+      const data = await res.json();
+
+      console.log("✅ Adjust Response:", data);
+
+      window.location.reload();
+
+    } catch (err) {
+      console.error("❌ Adjust error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (!customer) {
     return <Page title="Loading customer..." />;
@@ -51,9 +91,7 @@ export default function RewardCustomerDetail() {
       <Layout>
 
         {/* Shopify Customer Info */}
-
         <Layout.Section>
-
           <Card title="Customer Information" sectioned>
 
             <Text><b>Name:</b> {customer.firstName} {customer.lastName}</Text>
@@ -68,17 +106,13 @@ export default function RewardCustomerDetail() {
             <Text><b>Address:</b> {customer.address || "-"}</Text>
 
           </Card>
-
         </Layout.Section>
 
-
         {/* Loyalty Info */}
-
         <Layout.Section>
-
           <Card title="Loyalty Wallet" sectioned>
 
-            <Text><b>Coins:</b> {customer.coins}</Text>
+            <Text><b>Points:</b> {customer.points}</Text>
             <br />
 
             <Text><b>Tier:</b> {customer.tier}</Text>
@@ -104,12 +138,51 @@ export default function RewardCustomerDetail() {
             </Text>
 
           </Card>
+        </Layout.Section>
+
+        {/* ✅ NEW ADJUSTMENT SECTION */}
+        <Layout.Section>
+
+          <Card title="Adjust Points" sectioned>
+
+            <div style={{ marginBottom: "10px" }}>
+              <TextField
+                label="Amount"
+                type="number"
+                value={adjustAmount}
+                onChange={setAdjustAmount}
+              />
+            </div>
+
+            <div style={{ marginBottom: "10px" }}>
+              <Select
+                label="Type"
+                options={[
+                  { label: "Add Points", value: "ADD" },
+                  { label: "Deduct Points", value: "DEDUCT" }
+                ]}
+                value={adjustType}
+                onChange={setAdjustType}
+              />
+            </div>
+
+            <div style={{ marginBottom: "10px" }}>
+              <TextField
+                label="Description"
+                value={adjustDesc}
+                onChange={setAdjustDesc}
+              />
+            </div>
+
+            <Button primary loading={loading} onClick={handleAdjust}>
+              Submit Adjustment
+            </Button>
+
+          </Card>
 
         </Layout.Section>
 
-
         {/* Transaction History */}
-
         <Layout.Section>
 
           <Card title="Points Transaction History">
