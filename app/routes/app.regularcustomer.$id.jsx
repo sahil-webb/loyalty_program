@@ -112,7 +112,7 @@ export default function RewardCustomerDetail() {
         <Layout.Section>
           <Card title="Loyalty Wallet" sectioned>
 
-            <Text><b>Points:</b> {customer.points}</Text>
+            <Text><b>Points:</b> {customer.coins}</Text>
             <br />
 
             <Text><b>Tier:</b> {customer.tier}</Text>
