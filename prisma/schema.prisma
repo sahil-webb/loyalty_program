@@ -1,138 +1,153 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Residence Rewards – Loyalty Program
+// Rebuild v2 — Postgres
 
 generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
+// ─── Shopify Session Storage (required by @shopify/shopify-app-session-storage-prisma) ───
+
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false)
-  scope         String?
-  expires       DateTime?
-  accessToken   String
-  userId        BigInt?
-  firstName     String?
-  lastName      String?
-  email         String?
-  accountOwner  Boolean   @default(false)
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false)
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
 
-model RewardCustomer {
-  id        Int @id @default(autoincrement())
+// ─── Loyalty ───────────────────────────────────────────────────────────────────
 
-  shop      String
-  shopifyId String
-
-  firstName String
-  lastName  String
-  email     String
-
-  birthday  String?
-  discountCode String?
-
-  points    Int @default(0)
-
-  referralCode String?
-  signInWithReferral Boolean @default(false)
-  signInReferralCode String?
-  lastVisitReward    DateTime?
-  tier String @default("Regular")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([shop, shopifyId])
-}
-
-model RewardRule {
-  id             Int      @id @default(autoincrement())
-  pointsPerUnit  Float    // e.g. 5   (points)
-  currencyUnit   Float    // e.g. 1   (dollar)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
-
-
-
-model PremiumCustomer {
-  id                 Int      @id @default(autoincrement())
-  shop               String
-  shopifyId          String
-  email              String?
-
-  coins              Int      @default(0)
-  discountCode       String?
-
-  referralCode       String?  @unique
-  signInWithReferral Boolean  @default(false)
-  signInReferralCode String?
-  birthday DateTime @default("2002-04-15T00:00:00.000Z")
-  tier               String   @default("VIP")
-  lastVisitReward    DateTime?
-
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  @@unique([shop, shopifyId])
-  @@index([shop])
-}
-
-model RewardTransaction {
-  id              Int      @id @default(autoincrement())
-
-  shop            String
-  shopifyId       String
-
-  type            TransactionType
-  points          Int
-  availablePoints Int
-  tier               String   @default("insider")
-  description     String?
-
-  orderId         String?
-  referralCode    String?
-
-  createdAt       DateTime @default(now())
-
-  @@index([shop, shopifyId])
-}
-
-model RegularPointRule {
-  id        Int      @id @default(autoincrement())
-  points    Int      @unique
-  discount  Int
-  createdAt DateTime @default(now())
-}
-
-model PremiumPointRule {
-  id        Int      @id @default(autoincrement())
-  points    Int      @unique
-  discount  Int
-  createdAt DateTime @default(now())
+enum Tier {
+  RESIDENT // Free — 1pt/$1 spend
+  VIP      // $150/yr — 2pts/$1 spend + perks
 }
 
 enum TransactionType {
-  EARN
-  REDEEM
-  REFERRAL
-  REVIEW
-  ORDER
-  ADJUSTMENT
+  EARN       // purchase points
+  REDEEM     // discount code redemption
+  REFERRAL   // referee completed first order
+  REVIEW     // product review submitted
+  SOCIAL     // social share credit
+  BIRTHDAY   // annual birthday bonus
+  ADJUSTMENT // manual merchant correction
+  VIP_JOIN   // VIP membership activated
+  VIP_RENEW  // VIP membership renewed
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
+model LoyaltyCustomer {
+  id             Int       @id @default(autoincrement())
+  shop           String
+  shopifyId      String    // Shopify customer GID
+  email          String?
+  firstName      String?
+  lastName       String?
+  birthday       DateTime?
+  tier           Tier      @default(RESIDENT)
+  vipExpiresAt   DateTime? // null = not VIP
+  points         Int       @default(0)
+  referralCode   String    @unique
+  referredByCode String?   // code used at sign-up
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  transactions   RewardTransaction[]
+  referralsSent  Referral[]           @relation("referrer")
+
+  @@unique([shop, shopifyId])
+  @@index([shop])
+  @@index([shop, email])
+}
+
+model RewardTransaction {
+  id           Int             @id @default(autoincrement())
+  shop         String
+  shopifyId    String
+  type         TransactionType
+  points       Int             // positive = earn, negative = redeem
+  balanceAfter Int
+  description  String?
+  orderId      String?         // Shopify order GID, for EARN / REDEEM
+  createdAt    DateTime        @default(now())
+
+  customer     LoyaltyCustomer @relation(fields: [shop, shopifyId], references: [shop, shopifyId])
+
+  @@index([shop, shopifyId])
+  @@index([shop, orderId])
+}
+
+// How many points each action earns per tier
+model PointRule {
+  id        Int      @id @default(autoincrement())
+  tier      Tier
+  action    String   // "ORDER" | "REVIEW" | "SOCIAL" | "REFERRAL" | "BIRTHDAY"
+  points    Int      // per-unit for ORDER (pts per $1), flat for others
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tier, action])
+}
+
+// Redemption tiers — what a point cost buys
+model Reward {
+  id            Int      @id @default(autoincrement())
+  tier          Tier?    // null = available to all tiers
+  pointCost     Int
+  discountValue Int      // USD cents (e.g. 500 = $5.00)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Referral {
+  id               Int            @id @default(autoincrement())
+  shop             String
+  referrerCode     String
+  refereeEmail     String
+  refereeShopifyId String?
+  status           ReferralStatus @default(PENDING)
+  createdAt        DateTime       @default(now())
+  completedAt      DateTime?
+
+  referrer         LoyaltyCustomer @relation("referrer", fields: [referrerCode], references: [referralCode])
+
+  @@unique([shop, refereeEmail])
+  @@index([shop, referrerCode])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  shop      String
+  action    String
+  entityId  String
+  before    Json?
+  after     Json?
+  actorId   String?  // merchant admin who made the change
+  createdAt DateTime @default(now())
+
+  @@index([shop, createdAt])
 }
