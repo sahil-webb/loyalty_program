@@ -242,16 +242,57 @@ async function handleSignup(body, shop) {
    GET CUSTOMER
 ======================================================== */
 async function getCustomer(body, shop) {
-  const { email } = body;
+  const { email, type } = body;
 
-  const customer = await prisma.rewardCustomer.findFirst({
-    where: { email, shop }
-  });
+  if (!email) {
+    return response(false, "Email missing");
+  }
 
-  return new Response(JSON.stringify({
-    success: true,
-    customer
-  }));
+  let customer = null;
+
+  /* ===============================
+     PREMIUM CUSTOMER
+  =============================== */
+  if (type === "premium") {
+    customer = await prisma.premiumCustomer.findFirst({
+      where: { email, shop }
+    });
+
+    if (!customer) {
+      return response(false, "Premium customer not found");
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      type: "premium",
+      customer
+    }), {
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  /* ===============================
+     REGULAR CUSTOMER
+  =============================== */
+  if (type === "regular") {
+    customer = await prisma.rewardCustomer.findFirst({
+      where: { email, shop }
+    });
+
+    if (!customer) {
+      return response(false, "Regular customer not found");
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      type: "regular",
+      customer
+    }), {
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  return response(false, "Invalid customer type");
 }
 
 /* ========================================================
