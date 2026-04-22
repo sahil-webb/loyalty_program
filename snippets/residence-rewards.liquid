@@ -1,0 +1,219 @@
+{% comment %}
+  Residence Rewards Widget
+  ─────────────────────────────────────────────────────────────────────────────
+  Installation:
+    1. In your theme editor, open customers/account.liquid (or the equivalent)
+    2. Add: {% render 'residence-rewards' %}
+
+  Requires: customer must be logged in (Shopify wraps account pages)
+{% endcomment %}
+
+{% if customer %}
+  <div
+    id="rr-widget"
+    data-customer-id="gid://shopify/Customer/{{ customer.id }}"
+    data-shop="{{ shop.permanent_domain }}"
+    data-first-name="{{ customer.first_name | escape }}"
+    data-email="{{ customer.email | escape }}"
+  >
+    <p style="color:#999;font-size:14px;">Loading Residence Rewards…</p>
+  </div>
+
+  <style>
+    #rr-widget{font-family:inherit;max-width:540px;margin:32px 0}
+    .rr-card{border:1px solid #e5e5e5;border-radius:12px;padding:24px;background:#fff}
+    .rr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .rr-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;letter-spacing:.04em}
+    .rr-badge--resident{background:#f0f4ff;color:#3b5bdb}
+    .rr-badge--vip{background:#fff3bf;color:#e67700}
+    .rr-points{font-size:36px;font-weight:700;margin:0 0 4px}
+    .rr-sub{font-size:13px;color:#888;margin:0 0 20px}
+    .rr-rewards{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+    .rr-reward{border:1px solid #e5e5e5;border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color .15s}
+    .rr-reward:hover{border-color:#3b5bdb}
+    .rr-reward--disabled{opacity:.45;cursor:not-allowed}
+    .rr-reward__cost{font-size:18px;font-weight:700;color:#1a1a1a}
+    .rr-reward__label{font-size:12px;color:#888;margin-top:2px}
+    .rr-reward__btn{margin-top:10px;padding:6px 14px;border-radius:6px;border:none;background:#1a1a1a;color:#fff;font-size:13px;cursor:pointer;width:100%}
+    .rr-reward__btn:disabled{background:#ccc;cursor:not-allowed}
+    .rr-referral{background:#f8f9fa;border-radius:8px;padding:14px;font-size:13px}
+    .rr-referral__code{display:flex;align-items:center;gap:8px;margin-top:8px}
+    .rr-referral__input{flex:1;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:13px;font-family:monospace;background:#fff}
+    .rr-referral__copy{padding:6px 12px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:12px;cursor:pointer}
+    .rr-alert{padding:10px 14px;border-radius:8px;font-size:13px;margin-top:12px}
+    .rr-alert--success{background:#ebfbee;color:#2f9e44}
+    .rr-alert--error{background:#fff5f5;color:#c92a2a}
+    .rr-signup{text-align:center;padding:20px}
+    .rr-signup__btn{padding:10px 24px;border-radius:8px;border:none;background:#1a1a1a;color:#fff;font-size:14px;cursor:pointer}
+  </style>
+
+  <script>
+  (function () {
+    const el      = document.getElementById('rr-widget');
+    const cid     = el.dataset.customerId;
+    const shop    = el.dataset.shop;
+    const fname   = el.dataset.firstName;
+    const email   = el.dataset.email;
+    const baseUrl = '/apps/rewards';
+
+    // ── Fetch status ─────────────────────────────────────────────────────────
+    fetch(`${baseUrl}?customerId=${encodeURIComponent(cid)}&shop=${encodeURIComponent(shop)}`)
+      .then(r => r.json())
+      .then(({ customer, rewards }) => {
+        if (!customer) {
+          renderSignup(rewards);
+        } else {
+          renderDashboard(customer, rewards);
+        }
+      })
+      .catch(() => {
+        el.innerHTML = '<p style="color:#c92a2a;font-size:13px;">Could not load Residence Rewards.</p>';
+      });
+
+    // ── Sign-up ──────────────────────────────────────────────────────────────
+    function renderSignup(rewards) {
+      const params  = new URLSearchParams(window.location.search);
+      const refCode = params.get('ref') || '';
+
+      el.innerHTML = `
+        <div class="rr-card">
+          <div class="rr-signup">
+            <p style="font-size:20px;font-weight:700;margin:0 0 8px">Join Residence Rewards</p>
+            <p style="font-size:13px;color:#888;margin:0 0 20px">
+              Earn points on every purchase. Free to join.
+            </p>
+            ${refCode ? `<p style="font-size:12px;color:#3b5bdb;margin-bottom:16px">Referral code applied: <strong>${escHtml(refCode)}</strong></p>` : ''}
+            <button class="rr-signup__btn" id="rr-join-btn">Join Now — It's Free</button>
+            <div id="rr-join-msg"></div>
+          </div>
+        </div>`;
+
+      document.getElementById('rr-join-btn').addEventListener('click', function () {
+        this.disabled = true;
+        this.textContent = 'Joining…';
+        fetch(baseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'signup',
+            customerId: cid,
+            shop,
+            email,
+            firstName: fname,
+            referralCode: refCode || undefined,
+          }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (data.success) {
+              renderDashboard(data.customer, rewards);
+            } else {
+              document.getElementById('rr-join-msg').innerHTML =
+                `<div class="rr-alert rr-alert--error">${escHtml(data.error || 'Something went wrong.')}</div>`;
+              this.disabled = false;
+              this.textContent = 'Try Again';
+            }
+          });
+      });
+    }
+
+    // ── Dashboard ────────────────────────────────────────────────────────────
+    function renderDashboard(customer, rewards) {
+      const tier    = customer.effectiveTier || customer.tier;
+      const isVip   = tier === 'VIP';
+      const tierLabel = isVip ? 'Residence VIP' : 'Residence Insider';
+      const tierCls   = isVip ? 'rr-badge--vip' : 'rr-badge--resident';
+
+      const rewardHtml = rewards.map(r => {
+        const dollars   = (r.discountValue / 100).toFixed(0);
+        const canRedeem = customer.points >= r.pointCost;
+        return `
+          <div class="rr-reward${canRedeem ? '' : ' rr-reward--disabled'}">
+            <div class="rr-reward__cost">${r.pointCost} pts</div>
+            <div class="rr-reward__label">$${dollars} off</div>
+            <button
+              class="rr-reward__btn"
+              data-reward-id="${r.id}"
+              data-points="${r.pointCost}"
+              data-dollars="${dollars}"
+              ${canRedeem ? '' : 'disabled'}
+            >Redeem</button>
+          </div>`;
+      }).join('');
+
+      const referralLink = `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(customer.referralCode)}`;
+
+      el.innerHTML = `
+        <div class="rr-card">
+          <div class="rr-header">
+            <span style="font-weight:600;font-size:15px">Residence Rewards</span>
+            <span class="rr-badge ${tierCls}">${tierLabel}</span>
+          </div>
+          <p class="rr-points">${customer.points}<span style="font-size:16px;font-weight:400;color:#888"> pts</span></p>
+          <p class="rr-sub">${isVip ? '2 pts per $1 spent' : '1 pt per $1 spent'}</p>
+
+          <p style="font-size:13px;font-weight:600;margin:0 0 10px">Redeem Points</p>
+          <div class="rr-rewards">${rewardHtml}</div>
+
+          <div class="rr-referral">
+            <p style="margin:0 0 2px;font-weight:600;font-size:13px">Refer a Friend</p>
+            <p style="margin:0;color:#888;font-size:12px">
+              You earn ${isVip ? '200' : '100'} pts when they complete their first order.
+            </p>
+            <div class="rr-referral__code">
+              <input class="rr-referral__input" id="rr-ref-input" value="${referralLink}" readonly />
+              <button class="rr-referral__copy" id="rr-copy-btn">Copy</button>
+            </div>
+          </div>
+          <div id="rr-msg"></div>
+        </div>`;
+
+      // Copy referral link
+      document.getElementById('rr-copy-btn').addEventListener('click', function () {
+        navigator.clipboard.writeText(referralLink).then(() => {
+          this.textContent = 'Copied!';
+          setTimeout(() => { this.textContent = 'Copy'; }, 2000);
+        });
+      });
+
+      // Redeem buttons
+      el.querySelectorAll('.rr-reward__btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', function () {
+          const rewardId = parseInt(this.dataset.rewardId);
+          const dollars  = this.dataset.dollars;
+          this.disabled  = true;
+          this.textContent = '…';
+
+          fetch(baseUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'redeem', customerId: cid, shop, rewardId }),
+          })
+            .then(r => r.json())
+            .then(data => {
+              const msg = document.getElementById('rr-msg');
+              if (data.success) {
+                msg.innerHTML = `
+                  <div class="rr-alert rr-alert--success">
+                    Your $${dollars} discount code: <strong>${escHtml(data.discountCode)}</strong><br>
+                    Apply it at checkout. New balance: ${data.newBalance} pts.
+                  </div>`;
+                // Re-render with updated balance
+                customer.points = data.newBalance;
+                renderDashboard(customer, rewards);
+              } else {
+                msg.innerHTML = `<div class="rr-alert rr-alert--error">${escHtml(data.error || 'Redemption failed.')}</div>`;
+                this.disabled  = false;
+                this.textContent = 'Redeem';
+              }
+            });
+        });
+      });
+    }
+
+    function escHtml(str) {
+      return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+  })();
+  </script>
+{% endif %}
