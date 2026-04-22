@@ -141,7 +141,7 @@
           </div>`;
       }).join('');
 
-      const referralLink = `${window.location.origin}${window.location.pathname}?ref=${customer.referralCode}`;
+      const referralLink = `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(customer.referralCode)}`;
 
       el.innerHTML = `
         <div class="rr-card">

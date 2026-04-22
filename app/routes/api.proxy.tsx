@@ -179,7 +179,10 @@ async function handleRedeem({
   const discountCode = `RES-${nanoid(8).toUpperCase()}`;
   const newBalance = customer.points - reward.pointCost;
 
-  // Deduct points + create transaction
+  // Create Shopify discount code FIRST — if this fails, points are NOT deducted
+  await createDiscountCode(shop, reward.discountValue, discountCode);
+
+  // Only deduct points after the discount code is confirmed created in Shopify
   await db.$transaction([
     db.loyaltyCustomer.update({
       where: { id: customer.id },
@@ -196,14 +199,6 @@ async function handleRedeem({
       },
     }),
   ]);
-
-  // Generate Shopify discount code (best-effort — points already deducted)
-  try {
-    await createDiscountCode(shop, reward.discountValue, discountCode);
-  } catch (err) {
-    console.error("Failed to create Shopify discount code:", err);
-    // Code is still returned — merchant can create manually if needed
-  }
 
   return json({ success: true, discountCode, newBalance });
 }

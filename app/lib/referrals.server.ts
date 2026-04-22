@@ -30,7 +30,8 @@ export async function completeReferralIfFirstOrder(
     where: { referralCode: referee.referredByCode },
   });
 
-  if (!referrer) return;
+  // Ensure referrer belongs to the same shop — prevents cross-shop point awards
+  if (!referrer || referrer.shop !== shop) return;
 
   // Find pending referral record (matched by shop + refereeEmail)
   const referral = email

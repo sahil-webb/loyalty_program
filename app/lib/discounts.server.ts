@@ -67,12 +67,19 @@ export async function createDiscountCode(
   });
 
   const json = await response.json();
-  const errors = json.data?.discountCodeBasicCreate?.userErrors as
+
+  // Top-level request errors (auth failure, malformed query, etc.)
+  if (json.errors?.length) {
+    throw new Error(`Shopify GraphQL error: ${json.errors[0].message}`);
+  }
+
+  // Mutation-level user errors (invalid input, duplicate code, etc.)
+  const userErrors = json.data?.discountCodeBasicCreate?.userErrors as
     | Array<{ message: string }>
     | undefined;
 
-  if (errors?.length) {
-    throw new Error(`Shopify discount error: ${errors[0].message}`);
+  if (userErrors?.length) {
+    throw new Error(`Shopify discount error: ${userErrors[0].message}`);
   }
 
   return code;
