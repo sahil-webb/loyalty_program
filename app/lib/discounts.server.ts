@@ -66,7 +66,8 @@ export async function createDiscountCode(
     },
   });
 
-  const json = await response.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const json = (await response.json()) as any;
 
   // Top-level request errors (auth failure, malformed query, etc.)
   if (json.errors?.length) {

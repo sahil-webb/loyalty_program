@@ -5,6 +5,6 @@ export function nanoid(size = 10): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   const bytes = randomBytes(size);
   return Array.from(bytes)
-    .map((b) => chars[b % chars.length])
+    .map((b: number) => chars[b % chars.length])
     .join("");
 }

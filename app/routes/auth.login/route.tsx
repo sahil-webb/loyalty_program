@@ -31,9 +31,8 @@ export default function Auth() {
               label="Shop domain"
               details="example.myshopify.com"
               value={shop}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setShop(e.currentTarget.value)
-              }
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onChange={(e: any) => setShop(e.currentTarget.value)}
               autocomplete="on"
               error={errors.shop}
             ></s-text-field>
